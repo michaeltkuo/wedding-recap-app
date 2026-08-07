@@ -1,0 +1,92 @@
+# Development Guide
+
+## Commands
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run both services:
+
+```bash
+npm run dev
+```
+
+Run only API:
+
+```bash
+npm run dev:api
+```
+
+Run only web:
+
+```bash
+npm run dev:web
+```
+
+Build all packages:
+
+```bash
+npm run build
+```
+
+Typecheck all packages:
+
+```bash
+npm run typecheck
+```
+
+Run all tests:
+
+```bash
+npm run test
+```
+
+Run E2E tests:
+
+```bash
+npm run test:e2e
+```
+
+## Package-Specific Commands
+
+Contracts package:
+
+```bash
+npm --workspace @wedding/contracts run build
+npm --workspace @wedding/contracts run test
+```
+
+API package:
+
+```bash
+npm --workspace @wedding/api run build
+npm --workspace @wedding/api run test
+```
+
+Web package:
+
+```bash
+npm --workspace @wedding/web run build
+npm --workspace @wedding/web run test
+```
+
+## Test Strategy
+
+- Unit tests for schema and utility behavior.
+- Integration tests for API route contracts and pipeline state transitions.
+- E2E tests for contractor happy path and recovery flow.
+
+## Local QA Artifacts
+
+Manual and automated QA outputs are saved under:
+
+- `.gstack/qa-reports/`
+
+## Contribution Notes
+
+- Make contract changes in `packages/contracts` first.
+- Keep API and web behavior aligned with shared schema updates.
+- Prefer minimal, test-backed changes for pipeline logic.
