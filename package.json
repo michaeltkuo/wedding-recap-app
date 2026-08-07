@@ -1,0 +1,25 @@
+{
+  "name": "wedding-recap-app",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm --workspace @wedding/contracts run build && npm --workspace @wedding/api run build && npm --workspace @wedding/web run build",
+    "typecheck": "npm --workspace @wedding/contracts run typecheck && npm --workspace @wedding/api run typecheck && npm --workspace @wedding/web run typecheck",
+    "test": "npm --workspace @wedding/contracts run test && npm --workspace @wedding/api run test && npm --workspace @wedding/web run test",
+    "test:e2e": "playwright test",
+    "dev:api": "npm --workspace @wedding/api run dev",
+    "dev:web": "npm --workspace @wedding/web run dev",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.3.0",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
