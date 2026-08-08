@@ -351,7 +351,7 @@ export async function runPipeline(request: unknown) {
       try {
         const transcriptionStart = Date.now();
         let transcriptText = parsed.transcriptText;
-        let transcriptionSource: TranscriptionSource = parsed.transcriptText ? "provided_text" : "demo_fallback";
+        let transcriptionSource: TranscriptionSource = "provided_text";
         if (!transcriptText) {
           if (!needsFreshTranscription) {
             transcriptText = sessionStore.getSession(parsed.sessionId).transcriptText;
@@ -383,12 +383,7 @@ export async function runPipeline(request: unknown) {
         metricsRegistry.record("transcriptionMs", transcriptionMs);
 
         sessionStore.updateStage(parsed.sessionId, transitionStage("transcribing", "extracting"), 50);
-        await logSessionStageTransition(
-          parsed.sessionId,
-          "transcribing",
-          "extracting",
-          transcriptionSource === "demo_fallback" ? "Using demo fallback transcript (OPENAI_API_KEY missing)." : undefined
-        );
+        await logSessionStageTransition(parsed.sessionId, "transcribing", "extracting");
 
         const extractionStart = Date.now();
         const mergedTranscript = mergeFollowUpAnswers(transcriptText, parsed.followUpAnswers);

@@ -9,12 +9,30 @@ const repoRootEnvPath = path.resolve(currentDir, "../../../.env");
 loadEnv({ path: repoRootEnvPath });
 loadEnv();
 
+const port = Number(process.env.PORT ?? 8787);
+
 export const API_CONFIG = {
-  port: Number(process.env.PORT ?? 8787),
+  port,
   baseUrl: process.env.API_BASE_URL ?? "http://127.0.0.1:8787",
   contractorToken: process.env.CONTRACTOR_TOKEN ?? "demo-contractor-token",
   storageDir: process.env.STORAGE_DIR ?? ".data",
   sqlitePath: process.env.SQLITE_PATH ?? ".data/wedding-recap.sqlite",
+  web: {
+    origin: process.env.WEB_ORIGIN ?? "http://127.0.0.1:4173"
+  },
+  google: {
+    clientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+    clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
+    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? `http://127.0.0.1:${port}/api/auth/google/callback`,
+    docFolderId: process.env.GOOGLE_DOC_FOLDER_ID ?? "",
+    scopes: [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/drive"
+    ]
+  },
   upload: {
     maxSizeBytes: 50 * 1024 * 1024,
     ttlSeconds: 900,

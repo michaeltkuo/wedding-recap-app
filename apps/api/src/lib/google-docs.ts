@@ -1,6 +1,4 @@
 import { google } from "googleapis";
-import { randomUUID } from "node:crypto";
-
 import type { BlogOutput } from "../contracts.js";
 import { API_CONFIG } from "../config.js";
 
@@ -10,7 +8,7 @@ function getGoogleAuth() {
   const oauthClientId = API_CONFIG.googleDocs.oauthClientId;
   const oauthClientSecret = API_CONFIG.googleDocs.oauthClientSecret;
   const oauthRefreshToken = API_CONFIG.googleDocs.oauthRefreshToken;
-  const scopes = ["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive.file"];
+  const scopes = ["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive"];
 
   if (!clientEmail || !privateKeyRaw) {
     if (oauthClientId && oauthClientSecret && oauthRefreshToken) {

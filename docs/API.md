@@ -6,6 +6,13 @@ Auth header for protected routes:
 
 - `x-contractor-token: <token>`
 
+Google OAuth routes are available for docs publishing and do not require the contractor token:
+
+- `GET /api/auth/google/status`
+- `GET /api/auth/google/start`
+- `GET /api/auth/google/callback`
+- `POST /api/auth/google/logout`
+
 ## Health
 
 ### GET /health
@@ -133,6 +140,12 @@ Request:
 ```
 
 Success returns Google Doc metadata.
+
+## Google OAuth Status
+
+### GET /api/auth/google/status
+
+Returns whether Google OAuth is configured and whether the app currently has a connected account in memory.
 
 ## Session Polling
 

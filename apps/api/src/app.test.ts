@@ -53,6 +53,16 @@ async function waitForCompletion(app: ReturnType<typeof createApp>, sessionId: s
 }
 
 describe("api", () => {
+  it("reports Google auth as unconfigured when oauth env is missing", async () => {
+    const app = createApp();
+
+    const response = await request(app).get("/api/auth/google/status");
+
+    expect(response.status).toBe(200);
+    expect(response.body.configured).toBe(false);
+    expect(response.body.connected).toBe(false);
+  });
+
   it("rejects unsupported upload types", async () => {
     const app = createApp();
     const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();

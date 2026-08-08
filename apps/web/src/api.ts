@@ -1,11 +1,20 @@
 import type { PipelineStartRequest, SessionEvent, SessionResult, SignUploadRequest } from "@wedding/contracts";
 
+export type GoogleAuthStatus = {
+  configured: boolean;
+  connected: boolean;
+  email?: string;
+  connectedAt?: string;
+  authorizationUrl?: string;
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8787";
 const CONTRACTOR_TOKEN = "demo-contractor-token";
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "content-type": "application/json",
       "x-contractor-token": CONTRACTOR_TOKEN,
@@ -63,4 +72,12 @@ export async function getSession(sessionId: string) {
 
 export async function getTimeline(sessionId: string) {
   return apiRequest<{ sessionId: string; events: SessionEvent[] }>(`/api/sessions/${sessionId}/timeline`);
+}
+
+export async function getGoogleAuthStatus() {
+  return apiRequest<GoogleAuthStatus>("/api/auth/google/status");
+}
+
+export function getGoogleAuthStartUrl() {
+  return `${API_BASE_URL}/api/auth/google/start`;
 }

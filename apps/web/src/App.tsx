@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SessionEvent, SessionResult } from "@wedding/contracts";
 
-import { createSession, getSession, getTimeline, signUpload, startPipeline, uploadAudio } from "./api";
+import type { GoogleAuthStatus } from "./api";
+import { createSession, getGoogleAuthStartUrl, getGoogleAuthStatus, getSession, getTimeline, signUpload, startPipeline, uploadAudio } from "./api";
 import { canPublish, transitionUiStage, type ApprovalChecklist, type UiStage } from "./sessionMachine";
 
 const allowedMimeTypes = new Set(["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav"]);
@@ -22,6 +23,7 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [result, setResult] = useState<SessionResult | null>(null);
   const [timeline, setTimeline] = useState<SessionEvent[]>([]);
+  const [googleAuthStatus, setGoogleAuthStatus] = useState<GoogleAuthStatus | null>(null);
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
   const [checklist, setChecklist] = useState<ApprovalChecklist>(defaultChecklist);
   const [isRecording, setIsRecording] = useState(false);
@@ -32,6 +34,12 @@ export default function App() {
   const intervalRef = useRef<number | null>(null);
 
   const publishReady = useMemo(() => canPublish(checklist), [checklist]);
+
+  useEffect(() => {
+    void getGoogleAuthStatus()
+      .then((status) => setGoogleAuthStatus(status))
+      .catch(() => setGoogleAuthStatus(null));
+  }, []);
 
   useEffect(() => {
     if (!sessionId) {
@@ -187,6 +195,10 @@ export default function App() {
     await submit(selectedFile, followUpAnswers);
   }
 
+  function handleConnectGoogle() {
+    window.location.assign(getGoogleAuthStartUrl());
+  }
+
   return (
     <main className="min-h-screen px-6 py-10 text-[#2a1c21]">
       <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.2fr_0.8fr]">
@@ -205,6 +217,24 @@ export default function App() {
                 <p className="text-sm uppercase tracking-[0.3em] text-[#f5d1ae]">Current stage</p>
                 <p className="mt-3 text-3xl font-semibold capitalize">{uiStage.replaceAll("_", " ")}</p>
                 <p className="mt-4 text-sm leading-6 text-[#f6e4d4]">{statusMessage}</p>
+              </div>
+
+              <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-white/5 p-4 text-sm text-[#f6e4d4]">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#f5d1ae]">Google auth</p>
+                <p className="mt-2 font-medium text-white">
+                  {googleAuthStatus?.configured === false
+                    ? "OAuth is not configured yet."
+                    : googleAuthStatus?.connected
+                      ? `Connected as ${googleAuthStatus.email}`
+                      : "Google is not connected."}
+                </p>
+                <button
+                  className="mt-3 rounded-full border border-[#f0b489] px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-[#f5d1ae] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/40"
+                  onClick={handleConnectGoogle}
+                  disabled={googleAuthStatus?.configured === false}
+                >
+                  {googleAuthStatus?.connected ? "Reconnect Google" : "Connect Google"}
+                </button>
               </div>
 
               <button
