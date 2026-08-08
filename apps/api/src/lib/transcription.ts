@@ -1,40 +1,23 @@
 import fs from "node:fs";
+import path from "node:path";
 
+import type { TranscriptionSource } from "../contracts.js";
 import { API_CONFIG } from "../config.js";
-
-const fallbackTranscript = [
-  "couple: Alex and Sam.",
-  "venue: Cypress Grove Estate House.",
-  "city: Orlando, Florida.",
-  "style: romantic garden.",
-  "timeline: sunset ceremony, candlelit dinner, packed dance floor.",
-  "moments: private vows, confetti exit.",
-  "portraits: soft lakeside portraits.",
-  "weather: warm and clear.",
-  "reception: crowded dance floor, heartfelt toasts."
-].join(" ");
-
-const fallbackMissingFieldsTranscript = [
-  "style: editorial.",
-  "moments: first look, ceremony.",
-  "portraits: clean portraits."
-].join(" ");
 
 export async function transcribeAudioFile(filePath: string, mimeType: string) {
   if (!API_CONFIG.openai.apiKey) {
-    const uploadedAudio = await fs.promises.readFile(filePath);
-    const uploadedText = uploadedAudio.toString("utf8");
-    if (uploadedText.includes("missing-fields")) {
-      return fallbackMissingFieldsTranscript;
-    }
-
-    return fallbackTranscript;
+    throw new Error("OPENAI_API_KEY is not configured. Configure Whisper credentials to transcribe uploaded audio.");
   }
 
   const formData = new FormData();
   const fileBuffer = await fs.promises.readFile(filePath);
+  if (fileBuffer.byteLength === 0) {
+    throw new Error("Uploaded audio file is empty. Please record for at least a few seconds and try again.");
+  }
+
   const audioBlob = new Blob([fileBuffer], { type: mimeType });
-  formData.append("file", audioBlob, "recap-audio");
+  const sourceFileName = path.basename(filePath);
+  formData.append("file", audioBlob, sourceFileName);
   formData.append("model", API_CONFIG.openai.model);
 
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -55,5 +38,8 @@ export async function transcribeAudioFile(filePath: string, mimeType: string) {
     throw new Error("Whisper transcription returned empty text");
   }
 
-  return payload.text.trim();
+  return {
+    text: payload.text.trim(),
+    source: "openai" as TranscriptionSource
+  };
 }

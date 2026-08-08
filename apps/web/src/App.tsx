@@ -137,6 +137,16 @@ export default function App() {
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      if (blob.size < 2048) {
+        setUiStage("error");
+        setStatusMessage("Recording is too short. Please record for at least a few seconds before processing.");
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        recorderRef.current = null;
+        setIsRecording(false);
+        return;
+      }
+
       const file = new File([blob], `recap-${Date.now()}.webm`, { type: "audio/webm" });
       setSelectedFile(file);
       void submit(file).catch((error) => {

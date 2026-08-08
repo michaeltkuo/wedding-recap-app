@@ -1,3 +1,14 @@
+import { config as loadEnv } from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const currentFile = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFile);
+const repoRootEnvPath = path.resolve(currentDir, "../../../.env");
+
+loadEnv({ path: repoRootEnvPath });
+loadEnv();
+
 export const API_CONFIG = {
   port: Number(process.env.PORT ?? 8787),
   baseUrl: process.env.API_BASE_URL ?? "http://127.0.0.1:8787",
@@ -19,6 +30,6 @@ export const API_CONFIG = {
     oauthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID,
     oauthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
     oauthRefreshToken: process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
-    folderId: process.env.GOOGLE_DOCS_FOLDER_ID ?? "1M9Lbj4nUF9kBQQVw3Q19RM_XGh7u18-s"
+    folderId: process.env.GOOGLE_DOCS_FOLDER_ID
   }
 } as const;

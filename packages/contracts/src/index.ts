@@ -119,6 +119,15 @@ export const RetryMetadataSchema = z.object({
   lastFailureReason: z.string().optional()
 });
 
+export const TranscriptionSourceSchema = z.enum([
+  "openai",
+  "provided_text"
+]);
+
+export const TranscriptionMetadataSchema = z.object({
+  source: TranscriptionSourceSchema
+});
+
 export const SessionResultSchema = z.object({
   sessionId: z.string().min(1),
   stage: SessionStageSchema,
@@ -131,6 +140,7 @@ export const SessionResultSchema = z.object({
   errorMessage: z.string().optional(),
   partial: z.boolean().default(false),
   timeline: z.array(SessionEventSchema).default([]),
+  transcription: TranscriptionMetadataSchema.optional(),
   retryMetadata: RetryMetadataSchema.default({
     extractionAttempts: 0,
     generationAttempts: 0
@@ -182,6 +192,8 @@ export type BlogOutput = z.infer<typeof BlogOutputSchema>;
 export type FollowUp = z.infer<typeof FollowUpSchema>;
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 export type RetryMetadata = z.infer<typeof RetryMetadataSchema>;
+export type TranscriptionSource = z.infer<typeof TranscriptionSourceSchema>;
+export type TranscriptionMetadata = z.infer<typeof TranscriptionMetadataSchema>;
 export type SessionResult = z.infer<typeof SessionResultSchema>;
 export type SignUploadRequest = z.infer<typeof SignUploadRequestSchema>;
 export type SignUploadResponse = z.infer<typeof SignUploadResponseSchema>;

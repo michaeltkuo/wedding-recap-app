@@ -19,8 +19,7 @@ function getGoogleAuth() {
       return oauth2;
     }
 
-    // Local fallback that avoids service-account key files when org policy blocks key creation.
-    return new google.auth.GoogleAuth({ scopes });
+    throw new Error("Google Docs credentials are not configured. Provide service account credentials or Google OAuth credentials before publishing.");
   }
 
   const privateKey = privateKeyRaw.replace(/\\n/g, "\n");
@@ -53,15 +52,6 @@ function blogToDocumentText(output: BlogOutput) {
 }
 
 export async function publishDraftToGoogleDoc(output: BlogOutput) {
-  if (!API_CONFIG.googleDocs.serviceAccountEmail && !API_CONFIG.googleDocs.serviceAccountPrivateKey && !API_CONFIG.googleDocs.oauthClientId && !API_CONFIG.googleDocs.oauthClientSecret && !API_CONFIG.googleDocs.oauthRefreshToken) {
-    const docId = randomUUID();
-    return {
-      docId,
-      url: `https://docs.google.com/document/d/${docId}`,
-      status: "ready" as const
-    };
-  }
-
   const auth = getGoogleAuth();
   const docs = google.docs({ version: "v1", auth });
   const drive = google.drive({ version: "v3", auth });
@@ -92,14 +82,28 @@ export async function publishDraftToGoogleDoc(output: BlogOutput) {
     }
   });
 
-  await drive.files.update({
-    fileId: docId,
-    addParents: API_CONFIG.googleDocs.folderId,
-    removeParents: "root",
-    fields: "id, webViewLink"
-  });
+  if (API_CONFIG.googleDocs.folderId) {
+    try {
+      await drive.files.update({
+        fileId: docId,
+        addParents: API_CONFIG.googleDocs.folderId,
+        removeParents: "root",
+        supportsAllDrives: true,
+        fields: "id, webViewLink"
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown folder placement failure";
+      throw new Error(
+        `Google Drive folder placement failed for GOOGLE_DOCS_FOLDER_ID=${API_CONFIG.googleDocs.folderId}. ${reason}. ` +
+        "If your OAuth token only has https://www.googleapis.com/auth/drive.file, it cannot see arbitrary existing folders. " +
+        "Re-consent with Drive scope (https://www.googleapis.com/auth/drive) and refresh the stored refresh token. " +
+        "Fix by sharing that folder with the Google account tied to GOOGLE_OAUTH_REFRESH_TOKEN (Editor), " +
+        "or remove GOOGLE_DOCS_FOLDER_ID to publish to Drive root."
+      );
+    }
+  }
 
-  const metadata = await drive.files.get({ fileId: docId, fields: "id, webViewLink" });
+  const metadata = await drive.files.get({ fileId: docId, supportsAllDrives: true, fields: "id, webViewLink" });
 
   return {
     docId,
