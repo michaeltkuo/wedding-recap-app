@@ -285,7 +285,7 @@ export default function App() {
                     {prompt.prompt}
                     <input
                       data-testid={`follow-up-${prompt.field}`}
-                      className="mt-2 w-full rounded-2xl border border-[#e5cfc1] bg-[#fff9f3] px-4 py-3 outline-none"
+                      className="mt-2 w-full rounded-2xl border border-[#e5cfc1] bg-[#fff9f3] px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-[#8b4d38] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fff9f3]"
                       value={followUpAnswers[prompt.field] ?? ""}
                       onChange={(event) =>
                         setFollowUpAnswers((current) => ({
