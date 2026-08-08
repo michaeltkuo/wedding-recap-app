@@ -5,6 +5,14 @@ import { PipelineStartRequestSchema, SignUploadRequestSchema } from "./contracts
 
 import { API_CONFIG } from "./config.js";
 import {
+  clearGoogleAuth,
+  createGoogleOAuthState,
+  getGoogleAuthStatus,
+  getGoogleOAuthStartUrl,
+  handleGoogleOAuthCallback,
+  isGoogleOAuthConfigured
+} from "./lib/google-auth.js";
+import {
   assertContractorToken,
   createSession,
   draftSession,
@@ -18,10 +26,72 @@ import {
 
 export function createApp() {
   const app = express();
-  app.use(cors());
+  app.use(cors({ origin: API_CONFIG.web.origin, credentials: true }));
   app.use(express.json());
 
+  function readCookie(cookieHeader: string | undefined, cookieName: string) {
+    if (!cookieHeader) {
+      return undefined;
+    }
+
+    const match = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${cookieName}=`));
+    if (!match) {
+      return undefined;
+    }
+
+    return decodeURIComponent(match.slice(cookieName.length + 1));
+  }
+
   app.get("/health", (_request, response) => {
+    response.json({ ok: true });
+  });
+
+  app.get("/api/auth/google/status", (_request, response) => {
+    response.json(getGoogleAuthStatus());
+  });
+
+  app.get("/api/auth/google/start", (_request, response) => {
+    if (!isGoogleOAuthConfigured()) {
+      response.status(503).json({ error: "Google OAuth is not configured" });
+      return;
+    }
+
+    const state = createGoogleOAuthState();
+    response.cookie("wedding_google_oauth_state", state, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+      path: "/api/auth/google",
+      maxAge: 10 * 60 * 1000
+    });
+
+    response.redirect(302, getGoogleOAuthStartUrl(state));
+  });
+
+  app.get("/api/auth/google/callback", async (request, response) => {
+    try {
+      const expectedState = readCookie(request.header("cookie"), "wedding_google_oauth_state");
+      const returnedState = typeof request.query.state === "string" ? request.query.state : "";
+      const code = typeof request.query.code === "string" ? request.query.code : "";
+
+      if (!expectedState || expectedState !== returnedState) {
+        throw new Error("Google OAuth state did not match");
+      }
+
+      if (!code) {
+        throw new Error("Google OAuth code is missing");
+      }
+
+      await handleGoogleOAuthCallback(code);
+      response.clearCookie("wedding_google_oauth_state", { path: "/api/auth/google" });
+      response.redirect(302, `${API_CONFIG.web.origin}/recap/new?googleAuth=connected`);
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : "Google OAuth failed" });
+    }
+  });
+
+  app.post("/api/auth/google/logout", (_request, response) => {
+    clearGoogleAuth();
     response.json({ ok: true });
   });
 
@@ -73,10 +143,10 @@ export function createApp() {
     }
   });
 
-  app.post("/api/docs/publish", (request, response) => {
+  app.post("/api/docs/publish", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
-      response.json(publishSession(request.body.sessionId, request.body.publishMode));
+      response.json(await publishSession(request.body.sessionId, request.body.publishMode));
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : "Publish failed" });
     }

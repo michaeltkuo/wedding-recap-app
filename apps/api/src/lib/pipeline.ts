@@ -21,6 +21,7 @@ import {
 } from "../contracts.js";
 
 import { API_CONFIG } from "../config.js";
+import { buildFallbackGoogleDoc, canPublishToGoogleDocs, publishGoogleDoc } from "./google-docs.js";
 import { MetricsRegistry } from "./metrics.js";
 import { transitionStage } from "./session-machine.js";
 import { sessionStore } from "./store.js";
@@ -305,24 +306,24 @@ export async function runPipeline(request: PipelineStartRequest) {
       sessionStore.updateStage(parsed.sessionId, transitionStage("drafting", "publishing"), 90);
       const publishStart = Date.now();
       const publishMode = parsed.simulate?.publishMode ?? "normal";
+      if (publishMode === "failed") {
+        sessionStore.updateStage(parsed.sessionId, transitionStage("publishing", "error"), 100, "Google Docs publish failed");
+        return;
+      }
+
       if (publishMode === "queued") {
         sessionStore.updateSession(parsed.sessionId, {
-          googleDoc: {
-            docId: parsed.sessionId,
-            url: `https://docs.google.com/document/d/${parsed.sessionId}`,
-            status: "queued"
-          }
+          googleDoc: buildFallbackGoogleDoc(parsed.sessionId, "queued")
         });
-      } else if (publishMode === "failed") {
-        sessionStore.updateStage(parsed.sessionId, transitionStage("publishing", "error"), 100, "Google Docs publish failed");
+      } else if (canPublishToGoogleDocs()) {
+        const googleDoc = await publishGoogleDoc(blogOutput);
+        sessionStore.updateSession(parsed.sessionId, { googleDoc });
+      } else if (API_CONFIG.google.clientId.length > 0 || API_CONFIG.google.clientSecret.length > 0) {
+        sessionStore.updateStage(parsed.sessionId, transitionStage("publishing", "error"), 100, "Google OAuth is not connected");
         return;
       } else {
         sessionStore.updateSession(parsed.sessionId, {
-          googleDoc: {
-            docId: parsed.sessionId,
-            url: `https://docs.google.com/document/d/${parsed.sessionId}`,
-            status: "ready"
-          }
+          googleDoc: buildFallbackGoogleDoc(parsed.sessionId, "ready")
         });
       }
       const publishMs = Date.now() - publishStart;
@@ -382,7 +383,7 @@ export function draftSession(sessionId: string) {
   return { status: "success", blogOutput };
 }
 
-export function publishSession(sessionId: string, publishMode: "normal" | "queued" | "failed" = "normal") {
+export async function publishSession(sessionId: string, publishMode: "normal" | "queued" | "failed" = "normal") {
   const session = sessionStore.getSession(sessionId);
   if (!session.blogOutput) {
     throw new Error("Draft is not available");
@@ -390,11 +391,24 @@ export function publishSession(sessionId: string, publishMode: "normal" | "queue
   if (publishMode === "failed") {
     throw new Error("Google Docs publish failed");
   }
-  const googleDoc = {
-    docId: sessionId,
-    url: `https://docs.google.com/document/d/${sessionId}`,
-    status: publishMode === "queued" ? "queued" : "ready"
-  } as const;
+
+  if (publishMode === "queued") {
+    const googleDoc = buildFallbackGoogleDoc(sessionId, "queued");
+    sessionStore.updateSession(sessionId, { googleDoc });
+    return { status: publishMode, googleDoc };
+  }
+
+  if (canPublishToGoogleDocs()) {
+    const googleDoc = await publishGoogleDoc(session.blogOutput);
+    sessionStore.updateSession(sessionId, { googleDoc });
+    return { status: publishMode, googleDoc };
+  }
+
+  if (API_CONFIG.google.clientId.length > 0 || API_CONFIG.google.clientSecret.length > 0) {
+    throw new Error("Google OAuth is not connected");
+  }
+
+  const googleDoc = buildFallbackGoogleDoc(sessionId, "ready");
   sessionStore.updateSession(sessionId, { googleDoc });
   return { status: publishMode, googleDoc };
 }

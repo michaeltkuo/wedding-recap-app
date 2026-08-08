@@ -104,6 +104,14 @@ export const GoogleDocSchema = z.object({
   status: z.enum(["ready", "queued", "failed"])
 });
 
+export const GoogleAuthStatusSchema = z.object({
+  configured: z.boolean(),
+  connected: z.boolean(),
+  email: z.string().email().optional(),
+  connectedAt: z.string().datetime().optional(),
+  authorizationUrl: z.string().url().optional()
+});
+
 export const SessionResultSchema = z.object({
   sessionId: z.string().min(1),
   stage: SessionStageSchema,
@@ -171,6 +179,7 @@ export type SessionResult = z.infer<typeof SessionResultSchema>;
 export type SignUploadRequest = z.infer<typeof SignUploadRequestSchema>;
 export type SignUploadResponse = z.infer<typeof SignUploadResponseSchema>;
 export type PipelineStartRequest = z.infer<typeof PipelineStartRequestSchema>;
+export type GoogleAuthStatus = z.infer<typeof GoogleAuthStatusSchema>;
 
 export const PERFORMANCE_BUDGETS_MS = {
   uploadAndTranscription: 120_000,

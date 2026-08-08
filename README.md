@@ -78,7 +78,7 @@ See [docs/API.md](docs/API.md) for request and response details.
 
 ## Important Notes
 
-- This repo currently uses simulated pipeline internals for transcription/extraction/generation behavior.
+- This repo still falls back to a local Google Doc URL when OAuth is not configured, but it can publish to a real Google Doc once Google OAuth is connected.
 - Contracts are the source of truth. Update shared schemas in `packages/contracts/src/index.ts` first when changing payload shapes.
 - QA artifacts are written under `.gstack/qa-reports/`.
 
