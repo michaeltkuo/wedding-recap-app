@@ -104,6 +104,21 @@ export const GoogleDocSchema = z.object({
   status: z.enum(["ready", "queued", "failed"])
 });
 
+export const SessionEventSchema = z.object({
+  id: z.number().int().positive(),
+  sessionId: z.string().min(1),
+  stageFrom: SessionStageSchema,
+  stageTo: SessionStageSchema,
+  reason: z.string().optional(),
+  createdAt: z.string().datetime()
+});
+
+export const RetryMetadataSchema = z.object({
+  extractionAttempts: z.number().int().min(0).default(0),
+  generationAttempts: z.number().int().min(0).default(0),
+  lastFailureReason: z.string().optional()
+});
+
 export const SessionResultSchema = z.object({
   sessionId: z.string().min(1),
   stage: SessionStageSchema,
@@ -115,6 +130,11 @@ export const SessionResultSchema = z.object({
   googleDoc: GoogleDocSchema.optional(),
   errorMessage: z.string().optional(),
   partial: z.boolean().default(false),
+  timeline: z.array(SessionEventSchema).default([]),
+  retryMetadata: RetryMetadataSchema.default({
+    extractionAttempts: 0,
+    generationAttempts: 0
+  }),
   metrics: z.object({
     uploadMs: z.number().min(0).default(0),
     transcriptionMs: z.number().min(0).default(0),
@@ -147,19 +167,12 @@ export const SessionCreateResponseSchema = z.object({
   stage: SessionStageSchema
 });
 
-export const PipelineSimulationSchema = z.object({
-  transcriptionDelayMs: z.number().int().min(0).optional(),
-  extractionMode: z.enum(["normal", "missing_fields", "invalid_once", "invalid_twice"]).optional(),
-  generationDelayMs: z.number().int().min(0).optional(),
-  publishMode: z.enum(["normal", "queued", "failed"]).optional()
-}).optional();
-
 export const PipelineStartRequestSchema = z.object({
   sessionId: z.string().min(1),
-  uploadToken: z.string().min(1),
+  uploadToken: z.string().min(1).optional(),
   idempotencyKey: z.string().min(8),
-  transcriptText: z.string().min(1),
-  simulate: PipelineSimulationSchema
+  transcriptText: z.string().min(1).optional(),
+  followUpAnswers: z.record(z.string(), z.string().min(1)).optional()
 });
 
 export type SessionStage = z.infer<typeof SessionStageSchema>;
@@ -167,6 +180,8 @@ export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Recap = z.infer<typeof RecapSchema>;
 export type BlogOutput = z.infer<typeof BlogOutputSchema>;
 export type FollowUp = z.infer<typeof FollowUpSchema>;
+export type SessionEvent = z.infer<typeof SessionEventSchema>;
+export type RetryMetadata = z.infer<typeof RetryMetadataSchema>;
 export type SessionResult = z.infer<typeof SessionResultSchema>;
 export type SignUploadRequest = z.infer<typeof SignUploadRequestSchema>;
 export type SignUploadResponse = z.infer<typeof SignUploadResponseSchema>;

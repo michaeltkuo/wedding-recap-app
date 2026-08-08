@@ -9,8 +9,10 @@ import {
   createSession,
   draftSession,
   extractSession,
+  getSessionTimelineEntries,
   getSessionResult,
   metricsRegistry,
+  persistUploadedAudio,
   publishSession,
   runPipeline,
   signUpload
@@ -25,10 +27,10 @@ export function createApp() {
     response.json({ ok: true });
   });
 
-  app.post("/api/sessions", (request, response) => {
+  app.post("/api/sessions", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
-      response.status(201).json(createSession(API_CONFIG.contractorToken));
+      response.status(201).json(await createSession(API_CONFIG.contractorToken));
     } catch (error) {
       response.status(401).json({ error: error instanceof Error ? error.message : "Unauthorized" });
     }
@@ -41,6 +43,16 @@ export function createApp() {
       response.status(201).json(signUpload(payload));
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : "Invalid upload request" });
+    }
+  });
+
+  app.put("/api/uploads/:uploadToken", express.raw({ type: () => true, limit: API_CONFIG.upload.maxSizeBytes }), async (request, response) => {
+    try {
+      assertContractorToken(request.header("x-contractor-token"));
+      const body = Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body ?? []);
+      response.status(201).json(await persistUploadedAudio(request.params.uploadToken, body));
+    } catch (error) {
+      response.status(400).json({ error: error instanceof Error ? error.message : "Upload failed" });
     }
   });
 
@@ -64,28 +76,37 @@ export function createApp() {
     }
   });
 
-  app.post("/api/recaps/draft", (request, response) => {
+  app.post("/api/recaps/draft", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
-      response.json(draftSession(request.body.sessionId));
+      response.json(await draftSession(request.body.sessionId));
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : "Draft failed" });
     }
   });
 
-  app.post("/api/docs/publish", (request, response) => {
+  app.post("/api/docs/publish", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
-      response.json(publishSession(request.body.sessionId, request.body.publishMode));
+      response.json(await publishSession(request.body.sessionId));
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : "Publish failed" });
     }
   });
 
-  app.get("/api/sessions/:sessionId", (request, response) => {
+  app.get("/api/sessions/:sessionId", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
-      response.json(getSessionResult(request.params.sessionId));
+      response.json(await getSessionResult(request.params.sessionId));
+    } catch (error) {
+      response.status(404).json({ error: error instanceof Error ? error.message : "Session not found" });
+    }
+  });
+
+  app.get("/api/sessions/:sessionId/timeline", async (request, response) => {
+    try {
+      assertContractorToken(request.header("x-contractor-token"));
+      response.json({ sessionId: request.params.sessionId, events: await getSessionTimelineEntries(request.params.sessionId) });
     } catch (error) {
       response.status(404).json({ error: error instanceof Error ? error.message : "Session not found" });
     }

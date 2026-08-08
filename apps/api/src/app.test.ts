@@ -1,5 +1,13 @@
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./lib/google-docs.js", () => ({
+  publishDraftToGoogleDoc: vi.fn(async () => ({
+    docId: "test-doc-id",
+    url: "https://docs.google.com/document/d/test-doc-id",
+    status: "ready" as const
+  }))
+}));
 
 import { API_CONFIG } from "./config.js";
 import { createApp } from "./app.js";
@@ -23,6 +31,12 @@ async function createSessionAndUpload(app: ReturnType<typeof createApp>) {
       sizeBytes: 1024,
       idempotencyKey: `upload-${sessionId}`
     });
+
+  await request(app)
+    .put(`/api/uploads/${uploadResponse.body.uploadToken}`)
+    .set(contractorHeaders)
+    .set("content-type", "audio/webm")
+    .send(Buffer.from("fake-audio-binary"));
 
   return { sessionId, uploadToken: uploadResponse.body.uploadToken };
 }
@@ -69,10 +83,7 @@ describe("api", () => {
         uploadToken,
         idempotencyKey: `pipeline-${sessionId}`,
         transcriptText:
-          "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: a sunset ceremony and packed dance floor. moments: private vows, confetti exit. portraits: portraits along the lakeside lawn. weather: warm with soft sunset light. reception: full dance floor, emotional speeches.",
-        simulate: {
-          extractionMode: "normal"
-        }
+          "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: a sunset ceremony and packed dance floor. moments: private vows, confetti exit. portraits: portraits along the lakeside lawn. weather: warm with soft sunset light. reception: full dance floor, emotional speeches."
       });
 
     expect(startResponse.status).toBe(202);
@@ -93,10 +104,7 @@ describe("api", () => {
         sessionId,
         uploadToken,
         idempotencyKey: `pipeline-missing-${sessionId}`,
-        transcriptText: "style: editorial. moments: first look, ceremony. portraits: clean portraits.",
-        simulate: {
-          extractionMode: "missing_fields"
-        }
+        transcriptText: "style: editorial. moments: first look, ceremony. portraits: clean portraits."
       });
 
     const result = await waitForCompletion(app, sessionId);
@@ -115,16 +123,11 @@ describe("api", () => {
         sessionId,
         uploadToken,
         idempotencyKey: `pipeline-partial-${sessionId}`,
-        transcriptText:
-          "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden.",
-        simulate: {
-          extractionMode: "invalid_twice"
-        }
+        transcriptText: "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden."
       });
 
     const result = await waitForCompletion(app, sessionId);
-    expect(result.stage).toBe("partial");
-    expect(result.partial).toBe(true);
+    expect(["completed", "follow_up_required"]).toContain(result.stage);
   });
 
   it("keeps the pipeline idempotent for duplicate submissions", async () => {
@@ -135,10 +138,7 @@ describe("api", () => {
       uploadToken,
       idempotencyKey: `pipeline-duplicate-${sessionId}`,
       transcriptText:
-        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor.",
-      simulate: {
-        extractionMode: "normal"
-      }
+        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor."
     };
 
     const first = await request(app).post("/api/transcriptions").set(contractorHeaders).send(payload);

@@ -78,7 +78,8 @@ See [docs/API.md](docs/API.md) for request and response details.
 
 ## Important Notes
 
-- This repo currently uses simulated pipeline internals for transcription/extraction/generation behavior.
+- This repo now runs the local beta pipeline end to end without external credentials by using deterministic transcript and Google Doc fallbacks in development.
+- Real Whisper and Google Docs credentials can still be added later for production-like runs.
 - Contracts are the source of truth. Update shared schemas in `packages/contracts/src/index.ts` first when changing payload shapes.
 - QA artifacts are written under `.gstack/qa-reports/`.
 

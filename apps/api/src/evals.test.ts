@@ -1,4 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./lib/google-docs.js", () => ({
+  publishDraftToGoogleDoc: vi.fn(async () => ({
+    docId: "eval-doc-id",
+    url: "https://docs.google.com/document/d/eval-doc-id",
+    status: "ready" as const
+  }))
+}));
 
 import { runPipeline, signUpload, createSession, getSessionResult } from "./lib/pipeline.js";
 import { API_CONFIG } from "./config.js";
@@ -23,7 +31,7 @@ describe("eval gates", () => {
     const results = [] as boolean[];
 
     for (const fixture of baselineFixtures) {
-      const session = createSession(API_CONFIG.contractorToken);
+      const session = await createSession(API_CONFIG.contractorToken);
       const upload = signUpload({
         sessionId: session.sessionId,
         fileName: `${fixture.name}.webm`,
@@ -36,11 +44,10 @@ describe("eval gates", () => {
         sessionId: session.sessionId,
         uploadToken: upload.uploadToken,
         idempotencyKey: `eval-pipeline-${fixture.name}`,
-        transcriptText: fixture.transcriptText,
-        simulate: { extractionMode: "normal" }
+        transcriptText: fixture.transcriptText
       });
 
-      const result = getSessionResult(session.sessionId);
+      const result = await getSessionResult(session.sessionId);
       const title = result.blogOutput?.primary_title.toLowerCase() ?? "";
       const hasAllTerms = fixture.expectedTitleTerms.every((term) => title.includes(term));
       const enoughSections = (result.blogOutput?.section_blocks.length ?? 0) >= 4;
