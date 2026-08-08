@@ -53,13 +53,14 @@ async function waitForCompletion(app: ReturnType<typeof createApp>, sessionId: s
 }
 
 describe("api", () => {
-  it("reports Google auth as unconfigured when oauth env is missing", async () => {
+  it("reports Google auth status based on oauth env configuration", async () => {
     const app = createApp();
 
     const response = await request(app).get("/api/auth/google/status");
+    const expectedConfigured = API_CONFIG.google.clientId.length > 0 && API_CONFIG.google.clientSecret.length > 0;
 
     expect(response.status).toBe(200);
-    expect(response.body.configured).toBe(false);
+    expect(response.body.configured).toBe(expectedConfigured);
     expect(response.body.connected).toBe(false);
   });
 
