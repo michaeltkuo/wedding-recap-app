@@ -322,7 +322,7 @@ async function runGenerationWithRetry(sessionId: string, recap: Recap) {
   throw new Error("Generation failed after retries");
 }
 
-export async function runPipeline(request: unknown) {
+export function runPipeline(request: unknown) {
   const parsed = PipelineStartRequestSchema.parse(request);
 
   const result = sessionStore.rememberIdempotent(parsed.idempotencyKey, () => {

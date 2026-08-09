@@ -89,11 +89,20 @@ export class SessionStore {
     this.uploads.set(upload.uploadToken, upload);
   }
 
+  private assertUploadNotExpired(uploadToken: string, record: UploadRecord) {
+    const expiresAtMs = Date.parse(record.expiresAt);
+    if (!Number.isNaN(expiresAtMs) && Date.now() > expiresAtMs) {
+      this.uploads.delete(uploadToken);
+      throw new Error("Upload token expired");
+    }
+  }
+
   getUpload(uploadToken: string) {
     const record = this.uploads.get(uploadToken);
     if (!record) {
       throw new Error("Upload token not found");
     }
+    this.assertUploadNotExpired(uploadToken, record);
     return record;
   }
 

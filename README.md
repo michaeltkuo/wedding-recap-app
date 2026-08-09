@@ -78,8 +78,8 @@ See [docs/API.md](docs/API.md) for request and response details.
 
 ## Important Notes
 
-- This repo now runs the local beta pipeline end to end without external credentials by using deterministic transcript and Google Doc fallbacks in development.
-- Real Whisper and Google Docs credentials can still be added later for production-like runs.
+- OAuth is the primary Google Docs publishing path. Configure Google OAuth in `.env` before using publish in local beta.
+- The pipeline is strict by design: missing required inputs or misconfiguration surfaces explicit error/follow-up states instead of simulated success fallbacks.
 - Contracts are the source of truth. Update shared schemas in `packages/contracts/src/index.ts` first when changing payload shapes.
 - QA artifacts are written under `.gstack/qa-reports/`.
 

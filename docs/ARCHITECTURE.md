@@ -81,6 +81,6 @@ Frontend presents a simplified UX state model:
 
 ## Current Gaps
 
-- Pipeline integrations now run end-to-end in local beta, with deterministic fallback transcripts and local Google Doc metadata when external credentials are unavailable.
+- Pipeline integrations run end-to-end in local beta with strict failure signaling; missing credentials or invalid processing paths surface explicit errors/follow-ups rather than simulated success.
 - In-memory store and queue are process-local.
 - Production hardening still needs upload abuse controls, cost policy, and pilot expansion work from `TODOS.md`.

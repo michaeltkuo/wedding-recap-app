@@ -82,12 +82,16 @@ Request:
   "uploadToken": "...",
   "idempotencyKey": "pipeline-...",
   "transcriptText": "couple: ... venue: ... city: ...",
-  "simulate": {
-    "extractionMode": "normal",
-    "publishMode": "normal"
+  "followUpAnswers": {
+    "venue_name": "Cypress Grove Estate House"
   }
 }
 ```
+
+Notes:
+
+- `uploadToken` and `transcriptText` are optional for follow-up retries when the session already has uploaded audio.
+- `followUpAnswers` is optional and is used to patch missing required recap fields.
 
 Success `202`:
 
@@ -147,6 +151,17 @@ Success returns Google Doc metadata.
 
 Returns whether Google OAuth is configured and whether the app currently has a connected account in memory.
 
+Example `200`:
+
+```json
+{
+  "configured": true,
+  "connected": false
+}
+```
+
+If OAuth is not configured, `/api/auth/google/start` returns `503` and publish flows should be treated as blocked until credentials are configured.
+
 ## Session Polling
 
 ### GET /api/sessions/:sessionId
@@ -158,6 +173,27 @@ Returns full session result payload including:
 - follow-up prompts
 - googleDoc metadata
 - timing metrics
+
+### GET /api/sessions/:sessionId/timeline
+
+Returns state transition history for the session.
+
+Success `200`:
+
+```json
+{
+  "sessionId": "...",
+  "events": [
+    {
+      "id": 1,
+      "sessionId": "...",
+      "stageFrom": "uploaded",
+      "stageTo": "transcribing",
+      "createdAt": "2026-08-08T00:00:00.000Z"
+    }
+  ]
+}
+```
 
 ## Observability
 

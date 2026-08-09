@@ -185,13 +185,27 @@ export const SessionCreateResponseSchema = z.object({
   stage: SessionStageSchema
 });
 
-export const PipelineStartRequestSchema = z.object({
-  sessionId: z.string().min(1),
-  uploadToken: z.string().min(1).optional(),
-  idempotencyKey: z.string().min(8),
-  transcriptText: z.string().min(1).optional(),
-  followUpAnswers: z.record(z.string(), z.string().min(1)).optional()
-});
+export const PipelineStartRequestSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    uploadToken: z.string().min(1).optional(),
+    idempotencyKey: z.string().min(8),
+    transcriptText: z.string().min(1).optional(),
+    followUpAnswers: z.record(z.string(), z.string().min(1)).optional()
+  })
+  .superRefine((value, ctx) => {
+    const hasUploadToken = typeof value.uploadToken === "string" && value.uploadToken.length > 0;
+    const hasTranscriptText = typeof value.transcriptText === "string" && value.transcriptText.length > 0;
+    const hasFollowUpAnswers =
+      value.followUpAnswers !== undefined && Object.keys(value.followUpAnswers).length > 0;
+
+    if (!hasUploadToken && !hasTranscriptText && !hasFollowUpAnswers) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Pipeline start requires uploadToken, transcriptText, or followUpAnswers"
+      });
+    }
+  });
 
 export type SessionStage = z.infer<typeof SessionStageSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;

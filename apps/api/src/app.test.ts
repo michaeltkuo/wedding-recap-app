@@ -9,6 +9,13 @@ vi.mock("./lib/google-docs.js", () => ({
   }))
 }));
 
+vi.mock("./lib/transcription.js", () => ({
+  transcribeAudioFile: vi.fn(async () => ({
+    text: "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: a sunset ceremony and packed dance floor. moments: private vows, confetti exit. portraits: portraits along the lakeside lawn. weather: warm with soft sunset light. reception: full dance floor, emotional speeches.",
+    source: "openai" as const
+  }))
+}));
+
 import { API_CONFIG } from "./config.js";
 import { createApp } from "./app.js";
 import { metricsRegistry } from "./lib/pipeline.js";
@@ -104,6 +111,121 @@ describe("api", () => {
     expect(result.googleDoc.url).toContain("docs.google.com");
   });
 
+  it("stores upload bytes and rejects payloads that exceed requested size", async () => {
+    const app = createApp();
+    const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
+
+    const uploadResponse = await request(app)
+      .post("/api/uploads/sign-url")
+      .set(contractorHeaders)
+      .send({
+        sessionId: sessionResponse.body.sessionId,
+        fileName: "tiny.webm",
+        mimeType: "audio/webm",
+        sizeBytes: 4,
+        idempotencyKey: "tiny-upload-key"
+      });
+
+    const oversized = await request(app)
+      .put(`/api/uploads/${uploadResponse.body.uploadToken}`)
+      .set(contractorHeaders)
+      .set("content-type", "audio/webm")
+      .send(Buffer.from("oversized-payload"));
+
+    expect(oversized.status).toBe(400);
+    expect(oversized.body.error).toMatch(/exceeds requested size/i);
+  });
+
+  it("rejects upload writes when the upload token has expired", async () => {
+    const app = createApp();
+    const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
+
+    const uploadResponse = await request(app)
+      .post("/api/uploads/sign-url")
+      .set(contractorHeaders)
+      .send({
+        sessionId: sessionResponse.body.sessionId,
+        fileName: "expired.webm",
+        mimeType: "audio/webm",
+        sizeBytes: 1024,
+        idempotencyKey: "expired-upload-key"
+      });
+
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Date.now() + (API_CONFIG.upload.ttlSeconds + 1) * 1000);
+
+    const expired = await request(app)
+      .put(`/api/uploads/${uploadResponse.body.uploadToken}`)
+      .set(contractorHeaders)
+      .set("content-type", "audio/webm")
+      .send(Buffer.from("late-audio"));
+
+    nowSpy.mockRestore();
+
+    expect(expired.status).toBe(400);
+    expect(expired.body.error).toMatch(/expired/i);
+  });
+
+  it("returns session timeline entries for completed runs", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-timeline-${sessionId}`,
+        transcriptText:
+          "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: a sunset ceremony and packed dance floor. moments: private vows, confetti exit. portraits: portraits along the lakeside lawn. weather: warm with soft sunset light. reception: full dance floor, emotional speeches."
+      });
+
+    await waitForCompletion(app, sessionId);
+    const timeline = await request(app).get(`/api/sessions/${sessionId}/timeline`).set(contractorHeaders);
+
+    expect(timeline.status).toBe(200);
+    expect(timeline.body.sessionId).toBe(sessionId);
+    expect(Array.isArray(timeline.body.events)).toBe(true);
+    expect(timeline.body.events.length).toBeGreaterThan(0);
+    expect(timeline.body.events.some((event: { stageTo?: string }) => event.stageTo === "completed")).toBe(true);
+  });
+
+  it("supports audio-only pipeline requests and records openai transcription source", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+
+    const startResponse = await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-audio-only-${sessionId}`
+      });
+
+    expect(startResponse.status).toBe(202);
+
+    const result = await waitForCompletion(app, sessionId);
+    expect(result.stage).toBe("completed");
+    expect(result.transcription?.source).toBe("openai");
+  });
+
+  it("rejects unsatisfiable pipeline start requests before enqueue", async () => {
+    const app = createApp();
+    const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
+
+    const response = await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId: sessionResponse.body.sessionId,
+        idempotencyKey: "invalid-start-123"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/requires uploadToken, transcriptText, or followUpAnswers|upload token not found/i);
+  });
+
   it("returns follow-up prompts when required extraction fields are missing", async () => {
     const app = createApp();
     const { sessionId, uploadToken } = await createSessionAndUpload(app);
@@ -139,6 +261,43 @@ describe("api", () => {
 
     const result = await waitForCompletion(app, sessionId);
     expect(["completed", "follow_up_required"]).toContain(result.stage);
+  });
+
+  it("can recover from follow-up required using follow-up answers without re-upload", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-follow-up-initial-${sessionId}`,
+        transcriptText: "style: editorial. moments: first look, ceremony. portraits: clean portraits."
+      });
+
+    const followUp = await waitForCompletion(app, sessionId);
+    expect(followUp.stage).toBe("follow_up_required");
+
+    const retryResponse = await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        idempotencyKey: `pipeline-follow-up-retry-${sessionId}`,
+        followUpAnswers: {
+          couple_names: "Alex and Sam",
+          venue_name: "Cypress Grove Estate House",
+          venue_city_state: "Orlando, Florida"
+        }
+      });
+
+    expect(retryResponse.status).toBe(202);
+
+    const completed = await waitForCompletion(app, sessionId);
+    expect(completed.stage).toBe("completed");
+    expect(completed.followUps).toEqual([]);
   });
 
   it("keeps the pipeline idempotent for duplicate submissions", async () => {
