@@ -262,7 +262,7 @@ export function signUpload(request: SignUploadRequest) {
 }
 
 export async function persistUploadedAudio(uploadToken: string, body: Buffer) {
-  const upload = sessionStore.getUpload(uploadToken);
+  const upload = sessionStore.consumeUpload(uploadToken);
   if (body.byteLength > upload.sizeBytes) {
     throw new Error("Uploaded payload exceeds requested size");
   }
@@ -328,13 +328,17 @@ export function runPipeline(request: unknown) {
   const result = sessionStore.rememberIdempotent(parsed.idempotencyKey, () => {
     const existing = sessionStore.getSession(parsed.sessionId);
     const needsFreshTranscription = !["follow_up_required", "partial"].includes(existing.stage);
-    const upload = needsFreshTranscription
-      ? sessionStore.consumeUpload(parsed.uploadToken ?? "")
-      : parsed.uploadToken
-        ? sessionStore.getUpload(parsed.uploadToken)
-        : undefined;
+    const upload = parsed.uploadToken ? sessionStore.getUpload(parsed.uploadToken) : undefined;
 
-    if (existing.stage === "uploading" && parsed.transcriptText) {
+    if (upload && upload.sessionId !== parsed.sessionId) {
+      throw new Error("Upload token does not belong to this session");
+    }
+
+    if (needsFreshTranscription && !parsed.transcriptText && !upload?.filePath) {
+      throw new Error("Uploaded audio payload was not found for transcription");
+    }
+
+    if (existing.stage === "uploading" && (parsed.transcriptText || upload?.filePath)) {
       sessionStore.updateStage(parsed.sessionId, transitionStage("uploading", "uploaded"), 20);
       void logSessionStageTransition(parsed.sessionId, "uploading", "uploaded");
     }
@@ -478,10 +482,8 @@ export function runPipeline(request: unknown) {
 
 export async function getSessionResult(sessionId: string) {
   const session = sessionStore.getSession(sessionId);
-  const timeline = await getSessionTimeline(sessionId);
   return SessionResultSchema.parse({
     ...session,
-    timeline,
     retryMetadata: {
       extractionAttempts: session.extractAttempts,
       generationAttempts: session.generationAttempts,

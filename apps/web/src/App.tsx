@@ -7,6 +7,25 @@ import { createSession, getGoogleAuthStartUrl, getGoogleAuthStatus, getSession, 
 import { canPublish, transitionUiStage, type ApprovalChecklist, type UiStage } from "./sessionMachine";
 
 const allowedMimeTypes = new Set(["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav"]);
+const preferredRecordingMimeTypes = ["audio/webm", "audio/mp4"] as const;
+
+function pickSupportedRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") {
+    return null;
+  }
+
+  return preferredRecordingMimeTypes.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? null;
+}
+
+function extensionForMimeType(mimeType: string) {
+  switch (mimeType) {
+    case "audio/mp4":
+      return "mp4";
+    case "audio/webm":
+    default:
+      return "webm";
+  }
+}
 
 const defaultChecklist: ApprovalChecklist = {
   factualAccuracy: true,
@@ -133,8 +152,13 @@ export default function App() {
   }
 
   async function startRecording() {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Audio capture is not supported in this browser.");
+    }
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+    const recordingMimeType = pickSupportedRecordingMimeType();
+    const recorder = recordingMimeType ? new MediaRecorder(stream, { mimeType: recordingMimeType }) : new MediaRecorder(stream);
 
     chunksRef.current = [];
     recorder.ondataavailable = (event) => {
@@ -144,7 +168,8 @@ export default function App() {
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      const mimeType = recordingMimeType ?? (recorder.mimeType || "audio/webm");
+      const blob = new Blob(chunksRef.current, { type: mimeType });
       if (blob.size < 2048) {
         setUiStage("error");
         setStatusMessage("Recording is too short. Please record for at least a few seconds before processing.");
@@ -155,7 +180,8 @@ export default function App() {
         return;
       }
 
-      const file = new File([blob], `recap-${Date.now()}.webm`, { type: "audio/webm" });
+      const extension = extensionForMimeType(mimeType);
+      const file = new File([blob], `recap-${Date.now()}.${extension}`, { type: mimeType });
       setSelectedFile(file);
       void submit(file).catch((error) => {
         setUiStage("error");
@@ -178,7 +204,13 @@ export default function App() {
 
   async function handlePrimaryButtonClick() {
     if (!isRecording) {
-      await startRecording();
+      try {
+        await startRecording();
+      } catch (error) {
+        setUiStage("error");
+        setStatusMessage(error instanceof Error ? error.message : "Unable to start recording.");
+        setIsRecording(false);
+      }
       return;
     }
 

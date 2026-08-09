@@ -136,6 +136,38 @@ describe("api", () => {
     expect(oversized.body.error).toMatch(/exceeds requested size/i);
   });
 
+  it("rejects replay upload attempts after the first successful PUT", async () => {
+    const app = createApp();
+    const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
+
+    const uploadResponse = await request(app)
+      .post("/api/uploads/sign-url")
+      .set(contractorHeaders)
+      .send({
+        sessionId: sessionResponse.body.sessionId,
+        fileName: "single-use.webm",
+        mimeType: "audio/webm",
+        sizeBytes: 2048,
+        idempotencyKey: "single-use-upload-key"
+      });
+
+    const first = await request(app)
+      .put(`/api/uploads/${uploadResponse.body.uploadToken}`)
+      .set(contractorHeaders)
+      .set("content-type", "audio/webm")
+      .send(Buffer.from("first-audio"));
+
+    const second = await request(app)
+      .put(`/api/uploads/${uploadResponse.body.uploadToken}`)
+      .set(contractorHeaders)
+      .set("content-type", "audio/webm")
+      .send(Buffer.from("second-audio"));
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(400);
+    expect(second.body.error).toMatch(/already used/i);
+  });
+
   it("rejects upload writes when the upload token has expired", async () => {
     const app = createApp();
     const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
@@ -210,6 +242,24 @@ describe("api", () => {
     expect(result.transcription?.source).toBe("openai");
   });
 
+  it("rejects pipeline start when upload token belongs to a different session", async () => {
+    const app = createApp();
+    const first = await createSessionAndUpload(app);
+    const secondSession = await request(app).post("/api/sessions").set(contractorHeaders).send();
+
+    const response = await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId: secondSession.body.sessionId,
+        uploadToken: first.uploadToken,
+        idempotencyKey: `pipeline-cross-session-${Date.now()}`
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/does not belong to this session/i);
+  });
+
   it("rejects unsatisfiable pipeline start requests before enqueue", async () => {
     const app = createApp();
     const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
@@ -223,7 +273,7 @@ describe("api", () => {
       });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toMatch(/requires uploadToken, transcriptText, or followUpAnswers|upload token not found/i);
+    expect(response.body.error).toMatch(/requires uploadToken, transcriptText, or followUpAnswers|uploaded audio payload was not found for transcription/i);
   });
 
   it("returns follow-up prompts when required extraction fields are missing", async () => {
