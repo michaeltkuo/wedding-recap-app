@@ -111,33 +111,48 @@ function buildRecap(transcriptText: string): Recap {
   });
 }
 
+function formatList(values: string[] | undefined, fallback: string) {
+  const list = (values ?? []).filter(Boolean);
+  return list.length > 0 ? list.join(", ") : fallback;
+}
+
 function buildBlogOutput(recap: Recap): BlogOutput {
   const primary_title = `${recap.couple_names} ${recap.wedding_style} Wedding at ${recap.venue_name} ${recap.venue_city_state}`;
+  const signatureMomentText = formatList(recap.signature_moments, "their meaningful wedding moments");
+  const receptionText = formatList(recap.reception_highlights, "a joyful celebration with heartfelt toasts and a full dance floor");
+  const vendorText = formatList(recap.vendor_notes, "thoughtful planning and design details");
+  const traditionText = formatList(recap.cultural_traditions, "personal traditions that made the day feel uniquely theirs");
+
   const output = BlogOutputSchema.parse({
     primary_title,
-    meta_description: `${recap.couple_names} celebrated a ${recap.wedding_style} wedding at ${recap.venue_name} in ${recap.venue_city_state}, with thoughtful coverage from an Orlando wedding photographer team.`,
+    meta_description: `${recap.couple_names} celebrated a ${recap.wedding_style} wedding at ${recap.venue_name} in ${recap.venue_city_state}, with a warm, personal atmosphere and meaningful moments designed for a modern editorial wedding feature.`,
     h2_outline: [
       "The Wedding Day Setting",
       "Ceremony Highlights",
       "Portraits and Venue Moments",
-      "Reception Energy"
+      "Family, Traditions, and Personal Details",
+      "Reception Energy and Final Impressions"
     ],
     section_blocks: [
       {
         heading: "The Wedding Day Setting",
-        body: `${recap.couple_names} chose ${recap.venue_name} in ${recap.venue_city_state} for a ${recap.wedding_style} celebration grounded in real moments.`
+        body: `${recap.couple_names} chose ${recap.venue_name} in ${recap.venue_city_state} as the backdrop for a ${recap.wedding_style} celebration that felt polished, relaxed, and deeply personal. The setting gave the day an unmistakable sense of place, offering a location that supported both the ceremony atmosphere and the overall story of their wedding day. From the moment guests arrived, the couple’s style and priorities were clear: a meaningful celebration rooted in connection, beauty, and a natural flow from one moment to the next.`
       },
       {
         heading: "Ceremony Highlights",
-        body: `The day unfolded through ${recap.timeline_summary} with standout moments like ${recap.signature_moments.join(", ")}.`
+        body: `The ceremony unfolded through ${recap.timeline_summary}, with the couple’s focus on emotion and intention creating a memorable start to the day. Standout moments included ${signatureMomentText}, which gave the event the kind of energy that feels both intimate and cinematic. Rather than relying on excess or show, the couple let the meaningful details do the work, letting the ceremony remain grounded in sincerity while still feeling visually elevated and fully in tune with the venue.`
       },
       {
         heading: "Portraits and Venue Moments",
-        body: `${recap.portrait_notes} Weather conditions stayed ${recap.weather_notes.toLowerCase()}.`
+        body: `${recap.portrait_notes} The pacing of the day allowed these portraits to feel natural rather than forced, with ${recap.weather_notes.toLowerCase()} helping the photos carry a warm, flattering mood. Whether it was a quiet stretch before the celebration or a more active moment around the property, the couple’s interactions felt effortless and genuine. That kind of atmosphere is what makes a wedding feel timeless: not a set of staged poses, but a series of genuine moments that reflect how the couple really felt in the middle of the celebration.`
       },
       {
-        heading: "Reception Energy",
-        body: `Reception highlights included ${recap.reception_highlights?.join(", ") ?? "meaningful toasts and a full dance floor"}, keeping the story useful for local SEO and real client context.`
+        heading: "Family, Traditions, and Personal Details",
+        body: `The details that made this wedding feel personal were the ones that told the story best. ${traditionText} became part of the day in a way that felt organic and meaningful, while the couple’s family and closest loved ones shaped the emotional texture of the celebration. These touches gave the event more depth than a simple venue summary ever could, turning a beautiful wedding into a memorable one. It is those lived-in moments—shared laughter, quiet tears, family involvement, and careful planning—that make a day feel distinct and unforgettable.`
+      },
+      {
+        heading: "Reception Energy and Final Impressions",
+        body: `The reception brought the celebration into full focus, with ${receptionText} creating a lively and heartfelt atmosphere that felt true to the couple’s energy. Guests were clearly invested in the experience, and the overall mood balanced joy, elegance, and ease. The evening felt like the natural culmination of everything that came before it: thoughtful design, a strong sense of place, and a couple who clearly wanted to celebrate in a way that was rooted in real connection. In the end, this wedding was memorable not because it tried to be anything more than itself, but because every detail, from the venue to the final dance, felt sincere, warm, and beautifully personal. ${vendorText} helped bring the vision fully to life.`
       }
     ],
     recommended_image_slugs: [

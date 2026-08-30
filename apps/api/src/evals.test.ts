@@ -57,4 +57,31 @@ describe("eval gates", () => {
     const passRate = results.filter(Boolean).length / results.length;
     expect(passRate).toBeGreaterThanOrEqual(1);
   });
+
+  it("creates a longer, more narrative post structure with rich section depth", async () => {
+    const session = await createSession(API_CONFIG.contractorToken);
+    const upload = signUpload({
+      sessionId: session.sessionId,
+      fileName: "editorial-depth.webm",
+      mimeType: "audio/webm",
+      sizeBytes: 2048,
+      idempotencyKey: "eval-upload-editorial-depth"
+    });
+
+    await runPipeline({
+      sessionId: session.sessionId,
+      uploadToken: upload.uploadToken,
+      idempotencyKey: "eval-pipeline-editorial-depth",
+      transcriptText:
+        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: sunset ceremony, candlelit dinner, packed dance floor. moments: private vows, confetti exit, first look, family toast. portraits: golden hour portraits by the lake. weather: warm and clear. reception: heartfelt speeches, joyful dance floor, late-night dessert. vendors: planner, florist, DJ. traditions: family blessing, vintage vows."
+    });
+
+    const result = await getSessionResult(session.sessionId);
+    const sectionBlocks = result.blogOutput?.section_blocks ?? [];
+    const longEnough = sectionBlocks.length >= 5 && sectionBlocks.every((section) => section.body.length >= 120);
+    const hasNarrativeSignals = sectionBlocks.some((section) => /venue|atmosphere|family|ceremony|reception|moment/i.test(section.body));
+
+    expect(longEnough).toBe(true);
+    expect(hasNarrativeSignals).toBe(true);
+  });
 });
