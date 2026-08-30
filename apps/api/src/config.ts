@@ -42,7 +42,8 @@ export const API_CONFIG = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1"
+    transcriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1",
+    generationModel: process.env.OPENAI_GENERATION_MODEL ?? "gpt-4o-mini"
   },
   googleDocs: {
     serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,

@@ -30,7 +30,7 @@ export async function transcribeAudioFile(filePath: string, mimeType: string) {
   const audioBlob = new Blob([fileBuffer], { type: mimeType });
   const sourceFileName = path.basename(filePath);
   formData.append("file", audioBlob, sourceFileName);
-  formData.append("model", API_CONFIG.openai.model);
+  formData.append("model", API_CONFIG.openai.transcriptionModel);
 
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
