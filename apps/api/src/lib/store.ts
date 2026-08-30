@@ -1,4 +1,4 @@
-import type { BlogOutput, PipelineStartRequest, Recap, SessionResult, SessionStage, SignUploadResponse, Transcript } from "../contracts.js";
+import type { BlogOutput, Recap, SessionResult, SessionStage, SignUploadResponse, Transcript } from "../contracts.js";
 
 type UploadRecord = SignUploadResponse & {
   sessionId: string;
@@ -6,6 +6,8 @@ type UploadRecord = SignUploadResponse & {
   sizeBytes: number;
   idempotencyKey: string;
   used: boolean;
+  filePath?: string;
+  uploadedAt?: string;
 };
 
 type SessionInternal = SessionResult & {
@@ -13,7 +15,7 @@ type SessionInternal = SessionResult & {
   contractorToken: string;
   createdAt: number;
   extractAttempts: number;
-  simulation?: PipelineStartRequest["simulate"];
+  generationAttempts: number;
 };
 
 export class SessionStore {
@@ -31,6 +33,12 @@ export class SessionStore {
       contractorToken,
       createdAt: Date.now(),
       extractAttempts: 0,
+      generationAttempts: 0,
+      timeline: [],
+      retryMetadata: {
+        extractionAttempts: 0,
+        generationAttempts: 0
+      },
       metrics: {
         uploadMs: 0,
         transcriptionMs: 0,
@@ -81,11 +89,20 @@ export class SessionStore {
     this.uploads.set(upload.uploadToken, upload);
   }
 
+  private assertUploadNotExpired(uploadToken: string, record: UploadRecord) {
+    const expiresAtMs = Date.parse(record.expiresAt);
+    if (!Number.isNaN(expiresAtMs) && Date.now() > expiresAtMs) {
+      this.uploads.delete(uploadToken);
+      throw new Error("Upload token expired");
+    }
+  }
+
   getUpload(uploadToken: string) {
     const record = this.uploads.get(uploadToken);
     if (!record) {
       throw new Error("Upload token not found");
     }
+    this.assertUploadNotExpired(uploadToken, record);
     return record;
   }
 
@@ -95,6 +112,14 @@ export class SessionStore {
       throw new Error("Upload token already used");
     }
     record.used = true;
+    this.uploads.set(uploadToken, record);
+    return record;
+  }
+
+  markUploadStored(uploadToken: string, filePath: string) {
+    const record = this.getUpload(uploadToken);
+    record.filePath = filePath;
+    record.uploadedAt = new Date().toISOString();
     this.uploads.set(uploadToken, record);
     return record;
   }
@@ -111,8 +136,23 @@ export class SessionStore {
   incrementExtractAttempt(sessionId: string) {
     const session = this.getSession(sessionId);
     session.extractAttempts += 1;
+    session.retryMetadata = {
+      ...session.retryMetadata,
+      extractionAttempts: session.extractAttempts
+    };
     this.sessions.set(sessionId, session);
     return session.extractAttempts;
+  }
+
+  incrementGenerationAttempt(sessionId: string) {
+    const session = this.getSession(sessionId);
+    session.generationAttempts += 1;
+    session.retryMetadata = {
+      ...session.retryMetadata,
+      generationAttempts: session.generationAttempts
+    };
+    this.sessions.set(sessionId, session);
+    return session.generationAttempts;
   }
 }
 

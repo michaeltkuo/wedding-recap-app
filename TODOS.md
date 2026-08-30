@@ -2,6 +2,14 @@
 
 ## Deferred from plan-eng-review (2026-08-07)
 
+### 0) Gate recap workflow behind sign-in
+- What: Require authenticated users before allowing session creation/upload/pipeline start in the web UI.
+- Why: Prevent anonymous/public submissions and tie usage to known accounts.
+- Pros: Better abuse prevention, traceability, and eligibility controls.
+- Cons: Requires auth UX, backend session validation, and account lifecycle handling.
+- Context: Current app uses a shared contractor token for local beta and does not enforce end-user identity.
+- Depends on / blocked by: Choosing auth provider and token/session verification strategy.
+
 ### 1) Upload abuse controls for direct uploads
 - What: Add server-side MIME sniffing, malware scan, and quarantine flow for uploaded audio objects.
 - Why: Signed upload URLs limit auth surface but do not fully prevent malformed/malicious payload abuse.

@@ -66,13 +66,76 @@ npm --workspace @wedding/api run build
 npm --workspace @wedding/api run test
 ```
 
-Google Docs publishing via OAuth requires these env vars when you want real Google Docs output instead of the local fallback URL:
+Google Docs publishing requires OAuth configuration in local beta:
 
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URI` (defaults to `http://127.0.0.1:8787/api/auth/google/callback`)
+- `GOOGLE_OAUTH_REDIRECT_URI` (standardized to `http://127.0.0.1:8787/api/auth/google/callback` for this repo)
 - `GOOGLE_DOC_FOLDER_ID` (optional)
 - `WEB_ORIGIN` (defaults to `http://127.0.0.1:4173`)
+
+## Local OAuth Runbook
+
+This repo uses Google OAuth in local beta. The most common failure is `redirect_uri_mismatch`, which occurs when the URL registered in Google Cloud does not exactly match the callback URL the app generates.
+
+This issue was the root cause behind issue #7: the app and Google Console were using different hosts (`localhost` vs `127.0.0.1`), which caused Google to reject the callback even though the app itself looked otherwise valid.
+
+### Use one canonical loopback host
+
+This repo standardizes on `http://127.0.0.1:8787` for local API callbacks.
+
+Do not mix `localhost` and `127.0.0.1` across the app, browser, and Google Console. Google treats them as different origins.
+
+### Recommended local env values
+
+Use these values consistently in `.env`:
+
+```bash
+GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8787/api/auth/google/callback
+WEB_ORIGIN=http://127.0.0.1:4173
+VITE_API_BASE_URL=http://127.0.0.1:8787
+```
+
+### Register the exact URI in Google Cloud
+
+1. Open Google Cloud Console.
+2. Go to APIs & Services → Credentials.
+3. Open the OAuth 2.0 Client ID.
+4. In Authorized redirect URIs, add the exact value from `GOOGLE_OAUTH_REDIRECT_URI`.
+5. Save the change.
+6. Restart the local API process after changing env values.
+
+### Reproduce and validate locally
+
+```bash
+npm run dev
+```
+
+Then open the app at `http://127.0.0.1:4173` and click `Connect Google`.
+
+If it still fails:
+
+1. Check the browser URL after clicking Connect Google.
+2. Confirm the redirect URI in the Google error matches your exact `GOOGLE_OAUTH_REDIRECT_URI` value.
+3. Make sure the browser is not already using a stale session or stale OAuth cookie.
+4. Clear cookies for `localhost` or `127.0.0.1` and retry.
+5. Verify the runtime process actually sees the env value:
+
+```bash
+PID=$(lsof -iTCP:8787 -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR==2{print $2}')
+ps eww -p "$PID" | tr ' ' '\n' | grep '^GOOGLE_OAUTH_REDIRECT_URI=' || echo 'GOOGLE_OAUTH_REDIRECT_URI=NOT_SET_IN_PROCESS_ENV'
+```
+
+### Failure signatures to watch for
+
+- `redirect_uri_mismatch` → redirect URI in Google Cloud does not match the generated callback URL.
+- `state did not match` → browser cookie/state expired or the OAuth initiation/callback flow was interrupted.
+- Missing auth code → callback came back without a valid Google authorization code.
+
+Pipeline behavior note:
+
+- This repo no longer treats missing integrations as successful fallbacks.
+- If OAuth is not configured or publish/transcription inputs are invalid, the session transitions to explicit `error`, `partial`, or `follow_up_required` states.
 
 Web package:
 

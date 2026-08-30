@@ -81,6 +81,6 @@ Frontend presents a simplified UX state model:
 
 ## Current Gaps
 
-- Pipeline provider integrations are simulated rather than wired to production services.
+- Pipeline integrations run end-to-end in local beta with strict failure signaling; missing credentials or invalid processing paths surface explicit errors/follow-ups rather than simulated success.
 - In-memory store and queue are process-local.
-- Publish flow currently returns stub Google Doc metadata.
+- Production hardening still needs upload abuse controls, cost policy, and pilot expansion work from `TODOS.md`.

@@ -1,4 +1,17 @@
-import type { GoogleAuthStatus, PipelineStartRequest, SessionResult, SignUploadRequest } from "@wedding/contracts";
+import type { PipelineStartRequest, SessionEvent, SessionResult, SignUploadRequest } from "@wedding/contracts";
+
+export type GoogleAuthStatus = {
+  configured: boolean;
+  connected: boolean;
+  email?: string;
+  connectedAt?: string;
+  authorizationUrl?: string;
+  redirectUri?: string;
+  expectedRedirectUri?: string;
+  clientIdConfigured?: boolean;
+  clientSecretConfigured?: boolean;
+  missingEnvVars?: string[];
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8787";
 const CONTRACTOR_TOKEN = "demo-contractor-token";
@@ -27,10 +40,28 @@ export async function createSession() {
 }
 
 export async function signUpload(payload: SignUploadRequest) {
-  return apiRequest<{ uploadToken: string }>("/api/uploads/sign-url", {
+  return apiRequest<{ uploadToken: string; uploadUrl: string }>("/api/uploads/sign-url", {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export async function uploadAudio(uploadUrl: string, file: File) {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "x-contractor-token": CONTRACTOR_TOKEN,
+      "content-type": file.type
+    },
+    body: file
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(errorBody.error ?? "Upload failed");
+  }
+
+  return response.json() as Promise<{ stored: boolean; objectKey: string }>;
 }
 
 export async function startPipeline(payload: PipelineStartRequest) {
@@ -42,6 +73,10 @@ export async function startPipeline(payload: PipelineStartRequest) {
 
 export async function getSession(sessionId: string) {
   return apiRequest<SessionResult>(`/api/sessions/${sessionId}`);
+}
+
+export async function getTimeline(sessionId: string) {
+  return apiRequest<{ sessionId: string; events: SessionEvent[] }>(`/api/sessions/${sessionId}/timeline`);
 }
 
 export async function getGoogleAuthStatus() {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { BlogOutputSchema, RecapSchema, validateBlogTitle } from "./index";
+import {
+  BlogOutputSchema,
+  PipelineStartRequestSchema,
+  RecapSchema,
+  SessionResultSchema,
+  describeSupportedAudioFormats,
+  normalizeAudioUploadMimeType,
+  validateBlogTitle
+} from "./index";
 
 describe("contracts", () => {
   it("validates recap required fields", () => {
@@ -43,5 +51,67 @@ describe("contracts", () => {
         venue_city_state: "Orlando, Florida"
       })
     ).toBe(true);
+  });
+
+  it("normalizes common audio upload formats to supported mime types", () => {
+    expect(normalizeAudioUploadMimeType({ type: "audio/x-m4a", name: "recap.m4a" })).toBe("audio/mp4");
+    expect(normalizeAudioUploadMimeType({ type: "audio/m4a", name: "recap" })).toBe("audio/mp4");
+    expect(normalizeAudioUploadMimeType({ type: "", name: "recap.mp3" })).toBe("audio/mpeg");
+    expect(normalizeAudioUploadMimeType({ type: "text/plain", name: "notes.txt" })).toBeNull();
+  });
+
+  it("describes the supported upload formats", () => {
+    expect(describeSupportedAudioFormats()).toMatch(/WebM/i);
+    expect(describeSupportedAudioFormats()).toMatch(/M4A/i);
+  });
+
+  it("accepts follow-up retry payloads without upload token and transcript text", () => {
+    const result = PipelineStartRequestSchema.safeParse({
+      sessionId: "session-123",
+      idempotencyKey: "follow-up-retry-123",
+      followUpAnswers: {
+        couple_names: "Alex and Sam",
+        venue_name: "Cypress Grove Estate House",
+        venue_city_state: "Orlando, Florida"
+      }
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects pipeline payloads that provide no upload token, transcript text, or follow-up answers", () => {
+    const result = PipelineStartRequestSchema.safeParse({
+      sessionId: "session-789",
+      idempotencyKey: "invalid-empty-input-789"
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("provides default retry metadata and timeline values in session results", () => {
+    const result = SessionResultSchema.safeParse({
+      sessionId: "session-456",
+      stage: "completed",
+      progressPercent: 100,
+      followUps: [],
+      metrics: {
+        uploadMs: 1,
+        transcriptionMs: 1,
+        extractionMs: 1,
+        draftMs: 1,
+        publishMs: 1
+      }
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+
+    expect(result.data.timeline).toEqual([]);
+    expect(result.data.retryMetadata).toEqual({
+      extractionAttempts: 0,
+      generationAttempts: 0
+    });
   });
 });

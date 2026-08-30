@@ -1,94 +1,78 @@
 import { google } from "googleapis";
-
 import type { BlogOutput } from "../contracts.js";
-
 import { API_CONFIG } from "../config.js";
-import { createGoogleOAuthClient, googleAuthStore, isGoogleOAuthConfigured } from "./google-auth.js";
 
-function formatBlogOutput(blogOutput: BlogOutput) {
-  const sections = blogOutput.section_blocks
-    .map((section) => `${section.heading}\n${section.body}`)
-    .join("\n\n");
+function getGoogleAuth() {
+  const clientEmail = API_CONFIG.googleDocs.serviceAccountEmail;
+  const privateKeyRaw = API_CONFIG.googleDocs.serviceAccountPrivateKey;
+  const oauthClientId = API_CONFIG.googleDocs.oauthClientId;
+  const oauthClientSecret = API_CONFIG.googleDocs.oauthClientSecret;
+  const oauthRefreshToken = API_CONFIG.googleDocs.oauthRefreshToken;
+  const scopes = ["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive"];
 
-  const imageSlugs = blogOutput.recommended_image_slugs.map((slug) => `- ${slug}`).join("\n");
-  const internalLinks = blogOutput.internal_link_suggestions?.map((link) => `- ${link}`).join("\n") ?? "- None";
-  const altText = blogOutput.alt_text_suggestions?.map((suggestion) => `- ${suggestion}`).join("\n") ?? "- None";
+  if (!clientEmail || !privateKeyRaw) {
+    if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+      const oauth2 = new google.auth.OAuth2(oauthClientId, oauthClientSecret);
+      oauth2.setCredentials({ refresh_token: oauthRefreshToken });
+      return oauth2;
+    }
 
-  return [
-    blogOutput.primary_title,
-    "",
-    blogOutput.meta_description,
-    "",
-    "Outline",
-    blogOutput.h2_outline.map((heading) => `- ${heading}`).join("\n"),
-    "",
-    "Sections",
-    sections,
-    "",
-    "Recommended image slugs",
-    imageSlugs,
-    "",
-    "Internal link suggestions",
-    internalLinks,
-    "",
-    "Alt text suggestions",
-    altText
-  ].join("\n");
-}
-
-export function buildFallbackGoogleDoc(sessionId: string, status: "ready" | "queued") {
-  return {
-    docId: sessionId,
-    url: `https://docs.google.com/document/d/${sessionId}`,
-    status
-  } as const;
-}
-
-export function canPublishToGoogleDocs() {
-  return isGoogleOAuthConfigured() && googleAuthStore.hasConnection();
-}
-
-export async function publishGoogleDoc(blogOutput: BlogOutput) {
-  if (!isGoogleOAuthConfigured()) {
-    throw new Error("Google OAuth is not configured");
+    throw new Error("Google Docs credentials are not configured. Provide service account credentials or Google OAuth credentials before publishing.");
   }
 
-  const connection = googleAuthStore.getConnection();
-  if (!connection) {
-    throw new Error("Google OAuth is not connected");
-  }
+  const privateKey = privateKeyRaw.replace(/\\n/g, "\n");
 
-  const client = createGoogleOAuthClient();
-  client.setCredentials({
-    access_token: connection.accessToken,
-    expiry_date: connection.expiryDate,
-    refresh_token: connection.refreshToken
+  return new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes
+  });
+}
+
+function blogToDocumentText(output: BlogOutput) {
+  const lines: string[] = [output.primary_title, "", output.meta_description, ""];
+
+  output.section_blocks.forEach((section) => {
+    lines.push(section.heading);
+    lines.push(section.body);
+    lines.push("");
   });
 
-  const docsApi = google.docs({ auth: client, version: "v1" });
-  const driveApi = google.drive({ auth: client, version: "v3" });
+  lines.push("Recommended image slugs:");
+  output.recommended_image_slugs.forEach((slug) => lines.push(`- ${slug}`));
 
-  const createdDocument = await docsApi.documents.create({
+  if (output.alt_text_suggestions?.length) {
+    lines.push("", "Alt text suggestions:");
+    output.alt_text_suggestions.forEach((suggestion) => lines.push(`- ${suggestion}`));
+  }
+
+  return lines.join("\n");
+}
+
+export async function publishDraftToGoogleDoc(output: BlogOutput) {
+  const auth = getGoogleAuth();
+  const docs = google.docs({ version: "v1", auth });
+  const drive = google.drive({ version: "v3", auth });
+
+  const created = await docs.documents.create({
     requestBody: {
-      title: blogOutput.primary_title
+      title: output.primary_title
     }
   });
 
-  const docId = createdDocument.data.documentId;
+  const docId = created.data.documentId;
   if (!docId) {
-    throw new Error("Google Docs create did not return a document ID");
+    throw new Error("Google Docs creation returned no document id");
   }
 
-  const documentText = formatBlogOutput(blogOutput);
-  await docsApi.documents.batchUpdate({
+  const documentText = blogToDocumentText(output);
+  await docs.documents.batchUpdate({
     documentId: docId,
     requestBody: {
       requests: [
         {
           insertText: {
-            location: {
-              index: 1
-            },
+            location: { index: 1 },
             text: documentText
           }
         }
@@ -96,17 +80,32 @@ export async function publishGoogleDoc(blogOutput: BlogOutput) {
     }
   });
 
-  if (API_CONFIG.google.docFolderId.length > 0) {
-    await driveApi.files.update({
-      fileId: docId,
-      addParents: API_CONFIG.google.docFolderId,
-      fields: "id, parents"
-    });
+  if (API_CONFIG.googleDocs.folderId) {
+    try {
+      await drive.files.update({
+        fileId: docId,
+        addParents: API_CONFIG.googleDocs.folderId,
+        removeParents: "root",
+        supportsAllDrives: true,
+        fields: "id, webViewLink"
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown folder placement failure";
+      throw new Error(
+        `Google Drive folder placement failed for GOOGLE_DOCS_FOLDER_ID=${API_CONFIG.googleDocs.folderId}. ${reason}. ` +
+        "If your OAuth token only has https://www.googleapis.com/auth/drive.file, it cannot see arbitrary existing folders. " +
+        "Re-consent with Drive scope (https://www.googleapis.com/auth/drive) and refresh the stored refresh token. " +
+        "Fix by sharing that folder with the Google account tied to GOOGLE_OAUTH_REFRESH_TOKEN (Editor), " +
+        "or remove GOOGLE_DOCS_FOLDER_ID to publish to Drive root."
+      );
+    }
   }
+
+  const metadata = await drive.files.get({ fileId: docId, supportsAllDrives: true, fields: "id, webViewLink" });
 
   return {
     docId,
-    url: `https://docs.google.com/document/d/${docId}`,
+    url: metadata.data.webViewLink ?? `https://docs.google.com/document/d/${docId}`,
     status: "ready" as const
   };
 }

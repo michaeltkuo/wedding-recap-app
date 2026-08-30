@@ -1,7 +1,7 @@
 import type { SessionStage } from "../contracts.js";
 
 const allowedTransitions: Record<SessionStage, SessionStage[]> = {
-  idle: ["recording", "uploading"],
+  idle: ["recording", "uploading", "transcribing"],
   recording: ["uploading", "error"],
   uploading: ["uploaded", "error"],
   uploaded: ["transcribing", "error"],

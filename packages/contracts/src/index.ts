@@ -7,6 +7,46 @@ export const SupportedMimeTypes = [
   "audio/wav"
 ] as const;
 
+const SupportedMimeTypeSet = new Set<string>(SupportedMimeTypes);
+
+const SupportedAudioExtensions: Record<string, (typeof SupportedMimeTypes)[number]> = {
+  ".webm": "audio/webm",
+  ".mp4": "audio/mp4",
+  ".m4a": "audio/mp4",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav"
+};
+
+const SupportedAudioMimeAliases: Record<string, (typeof SupportedMimeTypes)[number]> = {
+  "audio/x-m4a": "audio/mp4",
+  "audio/m4a": "audio/mp4",
+  "audio/x-wav": "audio/wav",
+  "audio/x-mp3": "audio/mpeg",
+  "audio/x-webm": "audio/webm"
+};
+
+export function isSupportedAudioMimeType(mimeType: string) {
+  return SupportedMimeTypeSet.has(mimeType);
+}
+
+export function normalizeAudioUploadMimeType(file: { type?: string; name?: string }) {
+  const mimeType = file.type?.toLowerCase().trim();
+  if (mimeType && isSupportedAudioMimeType(mimeType)) {
+    return mimeType as (typeof SupportedMimeTypes)[number];
+  }
+
+  if (mimeType && SupportedAudioMimeAliases[mimeType]) {
+    return SupportedAudioMimeAliases[mimeType];
+  }
+
+  const extension = file.name?.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
+  return extension ? SupportedAudioExtensions[extension] ?? null : null;
+}
+
+export function describeSupportedAudioFormats() {
+  return "Supported: WebM (.webm), MP4/M4A (.mp4, .m4a), MP3 (.mp3), and WAV (.wav).";
+}
+
 export const SessionStageSchema = z.enum([
   "idle",
   "recording",
@@ -104,6 +144,30 @@ export const GoogleDocSchema = z.object({
   status: z.enum(["ready", "queued", "failed"])
 });
 
+export const SessionEventSchema = z.object({
+  id: z.number().int().positive(),
+  sessionId: z.string().min(1),
+  stageFrom: SessionStageSchema,
+  stageTo: SessionStageSchema,
+  reason: z.string().optional(),
+  createdAt: z.string().datetime()
+});
+
+export const RetryMetadataSchema = z.object({
+  extractionAttempts: z.number().int().min(0).default(0),
+  generationAttempts: z.number().int().min(0).default(0),
+  lastFailureReason: z.string().optional()
+});
+
+export const TranscriptionSourceSchema = z.enum([
+  "openai",
+  "provided_text"
+]);
+
+export const TranscriptionMetadataSchema = z.object({
+  source: TranscriptionSourceSchema
+});
+
 export const GoogleAuthStatusSchema = z.object({
   configured: z.boolean(),
   connected: z.boolean(),
@@ -123,6 +187,12 @@ export const SessionResultSchema = z.object({
   googleDoc: GoogleDocSchema.optional(),
   errorMessage: z.string().optional(),
   partial: z.boolean().default(false),
+  timeline: z.array(SessionEventSchema).default([]),
+  transcription: TranscriptionMetadataSchema.optional(),
+  retryMetadata: RetryMetadataSchema.default({
+    extractionAttempts: 0,
+    generationAttempts: 0
+  }),
   metrics: z.object({
     uploadMs: z.number().min(0).default(0),
     transcriptionMs: z.number().min(0).default(0),
@@ -155,26 +225,37 @@ export const SessionCreateResponseSchema = z.object({
   stage: SessionStageSchema
 });
 
-export const PipelineSimulationSchema = z.object({
-  transcriptionDelayMs: z.number().int().min(0).optional(),
-  extractionMode: z.enum(["normal", "missing_fields", "invalid_once", "invalid_twice"]).optional(),
-  generationDelayMs: z.number().int().min(0).optional(),
-  publishMode: z.enum(["normal", "queued", "failed"]).optional()
-}).optional();
+export const PipelineStartRequestSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    uploadToken: z.string().min(1).optional(),
+    idempotencyKey: z.string().min(8),
+    transcriptText: z.string().min(1).optional(),
+    followUpAnswers: z.record(z.string(), z.string().min(1)).optional()
+  })
+  .superRefine((value, ctx) => {
+    const hasUploadToken = typeof value.uploadToken === "string" && value.uploadToken.length > 0;
+    const hasTranscriptText = typeof value.transcriptText === "string" && value.transcriptText.length > 0;
+    const hasFollowUpAnswers =
+      value.followUpAnswers !== undefined && Object.keys(value.followUpAnswers).length > 0;
 
-export const PipelineStartRequestSchema = z.object({
-  sessionId: z.string().min(1),
-  uploadToken: z.string().min(1),
-  idempotencyKey: z.string().min(8),
-  transcriptText: z.string().min(1),
-  simulate: PipelineSimulationSchema
-});
+    if (!hasUploadToken && !hasTranscriptText && !hasFollowUpAnswers) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Pipeline start requires uploadToken, transcriptText, or followUpAnswers"
+      });
+    }
+  });
 
 export type SessionStage = z.infer<typeof SessionStageSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Recap = z.infer<typeof RecapSchema>;
 export type BlogOutput = z.infer<typeof BlogOutputSchema>;
 export type FollowUp = z.infer<typeof FollowUpSchema>;
+export type SessionEvent = z.infer<typeof SessionEventSchema>;
+export type RetryMetadata = z.infer<typeof RetryMetadataSchema>;
+export type TranscriptionSource = z.infer<typeof TranscriptionSourceSchema>;
+export type TranscriptionMetadata = z.infer<typeof TranscriptionMetadataSchema>;
 export type SessionResult = z.infer<typeof SessionResultSchema>;
 export type SignUploadRequest = z.infer<typeof SignUploadRequestSchema>;
 export type SignUploadResponse = z.infer<typeof SignUploadResponseSchema>;
@@ -198,7 +279,8 @@ export function validateBlogTitle(title: string, recap: Pick<Recap, "couple_name
     .toLowerCase()
     .split(/\s+/)
     .some((token) => normalizedTitle.includes(token));
-  const venueOk = normalizedTitle.includes(recap.venue_name.toLowerCase()) || normalizedTitle.includes(recap.venue_city_state.toLowerCase());
+  const venueOk = normalizedTitle.includes(recap.venue_name.toLowerCase());
+  const cityOk = normalizedTitle.includes(recap.venue_city_state.toLowerCase());
 
-  return couplesOk && venueOk;
+  return couplesOk && venueOk && cityOk;
 }

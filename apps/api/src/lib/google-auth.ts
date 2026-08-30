@@ -14,8 +14,16 @@ type GoogleConnection = {
   refreshToken: string;
 };
 
-export type GoogleAuthStatus = {
+export type GoogleOAuthDiagnostics = {
   configured: boolean;
+  clientIdConfigured: boolean;
+  clientSecretConfigured: boolean;
+  redirectUri: string;
+  expectedRedirectUri: string;
+  missingEnvVars: string[];
+};
+
+export type GoogleAuthStatus = GoogleOAuthDiagnostics & {
   connected: boolean;
   email?: string;
   connectedAt?: string;
@@ -48,6 +56,24 @@ export function isGoogleOAuthConfigured() {
   return API_CONFIG.google.clientId.length > 0 && API_CONFIG.google.clientSecret.length > 0;
 }
 
+export function getGoogleOAuthDiagnostics(): GoogleOAuthDiagnostics {
+  const clientIdConfigured = API_CONFIG.google.clientId.trim().length > 0;
+  const clientSecretConfigured = API_CONFIG.google.clientSecret.trim().length > 0;
+  const redirectUri = API_CONFIG.google.redirectUri;
+
+  return {
+    configured: clientIdConfigured && clientSecretConfigured,
+    clientIdConfigured,
+    clientSecretConfigured,
+    redirectUri,
+    expectedRedirectUri: redirectUri,
+    missingEnvVars: [
+      !clientIdConfigured ? "GOOGLE_OAUTH_CLIENT_ID" : null,
+      !clientSecretConfigured ? "GOOGLE_OAUTH_CLIENT_SECRET" : null
+    ].filter((value): value is string => Boolean(value))
+  };
+}
+
 export function createGoogleOAuthClient() {
   return new google.auth.OAuth2(API_CONFIG.google.clientId, API_CONFIG.google.clientSecret, API_CONFIG.google.redirectUri);
 }
@@ -62,7 +88,7 @@ export function getGoogleOAuthStartUrl(state: string) {
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: true,
-    scope: API_CONFIG.google.scopes,
+    scope: [...API_CONFIG.google.scopes],
     state
   });
 }
@@ -90,8 +116,8 @@ export async function handleGoogleOAuthCallback(code: string) {
   const email = await fetchGoogleEmail(client);
 
   googleAuthStore.setConnection({
-    accessToken: tokens.access_token,
-    expiryDate: tokens.expiry_date,
+    accessToken: tokens.access_token ?? undefined,
+    expiryDate: tokens.expiry_date ?? undefined,
     email,
     connectedAt: new Date().toISOString(),
     refreshToken: tokens.refresh_token ?? googleAuthStore.getConnection()!.refreshToken
@@ -104,9 +130,11 @@ export async function handleGoogleOAuthCallback(code: string) {
 }
 
 export function getGoogleAuthStatus(): GoogleAuthStatus {
-  if (!isGoogleOAuthConfigured()) {
+  const diagnostics = getGoogleOAuthDiagnostics();
+
+  if (!diagnostics.configured) {
     return {
-      configured: false,
+      ...diagnostics,
       connected: false
     };
   }
@@ -114,13 +142,13 @@ export function getGoogleAuthStatus(): GoogleAuthStatus {
   const connection = googleAuthStore.getConnection();
   if (!connection) {
     return {
-      configured: true,
+      ...diagnostics,
       connected: false
     };
   }
 
   return {
-    configured: true,
+    ...diagnostics,
     connected: true,
     email: connection.email,
     connectedAt: connection.connectedAt
