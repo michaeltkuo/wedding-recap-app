@@ -130,10 +130,15 @@ async function generateBlogOutputWithAI(recap: Recap) {
     throw new Error("OPENAI_API_KEY is not configured. AI generation is required and cannot run without a generation key.");
   }
 
-  const prompt = `You are writing a real editorial wedding recap for a wedding blog. Use only the details present in the transcript and do not invent facts. Keep the output grounded in the real wedding facts, but write in a polished, warm, story-driven editorial style similar to a premium wedding blog.
+  const prompt = `You are writing a real wedding recap for a premium editorial wedding blog. Use only the facts present in the transcript and do not invent details. The writing should feel warm, intimate, elevated, and emotionally rich—like a luxury wedding feature with a clear narrative arc, not a generic summary.
 
 Transcript facts:
 ${JSON.stringify(recap, null, 2)}
+
+Goals:
+- Write a blog post of approximately 1000-1800 words total.
+- Keep the piece grounded in the real wedding details, but write it with a refined, cinematic, story-driven editorial voice inspired by premium wedding publications.
+- The tone should feel personal, elegant, and emotionally observant, with the sensory atmosphere of a luxury wedding feature.
 
 Requirements:
 - Return valid JSON only.
@@ -147,12 +152,16 @@ Requirements:
     "internal_link_suggestions": [string],
     "alt_text_suggestions": [string]
   }
-- Include 5 H2 headings and at least 5 section blocks.
+- Include exactly 5 H2 headings and 5 section blocks.
+- Target each section body at roughly 180-260 words, for a total piece in the 1000-1800 word range.
 - The primary_title must include the couple names, the venue name, and the city/state.
-- Keep each section body rich, detailed, and narrative, not summary-like, with each body at least 120 characters.
-- Use a warm editorial tone grounded in the transcript facts only.
+- Generate the title, meta description, H2 outline, recommended image slugs, internal link suggestions, and alt text from the same wedding facts and article narrative.
+- Focus on atmosphere, emotional rhythm, venue character, meaningful moments, family dynamics, and the couple’s personality.
+- Use concrete details from the transcript only.
+- Avoid generic filler, vague praise, or template language.
+- Do not invent vendors, decor, emotional beats, or story details not in the transcript.
 - Do not include markdown fences.
-- Do not add unsupported details. Use the factual details from the recap only.`;
+- Keep the writing polished, warm, and naturally conversational with a premium editorial feel.`;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
