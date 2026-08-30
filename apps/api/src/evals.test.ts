@@ -1,10 +1,43 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockBlogReply = (title: string, city: string, venue: string) => ({
+  primary_title: `${title} at ${venue} in ${city}`,
+  meta_description: `A romantic wedding story for ${title} at ${venue} in ${city}.`,
+  h2_outline: ["Setting", "Ceremony", "Portraits", "Reception", "Closing"],
+  section_blocks: [
+    { heading: "Setting", body: `This wedding unfolded in ${city} with a warm and memorable atmosphere at ${venue}. The day began with thoughtful detail, soft light, and a sense of calm that carried across the entire celebration. Family, friends, and the couple created an environment that felt intimate, polished, and deeply personal from the start.` },
+    { heading: "Ceremony", body: `The ceremony brought the heart of the day into focus. ${title} and their partner shared vows in a setting shaped by sentiment and intention, with the venue adding a distinct sense of elegance and place. Guests were fully present as the couple made their promises, and the emotional rhythm of the moment felt grounded, sincere, and beautifully organic.` },
+    { heading: "Portraits", body: `Portraits followed with a relaxed and joyful pace. The couple moved through the grounds of ${venue} with ease, embracing the scenery and the natural light of ${city}. These images captured a balance between romance and ease, reflecting the warmth of the occasion while allowing the details of the day to feel candid and alive.` },
+    { heading: "Reception", body: `The reception carried the story forward with music, laughter, and heartfelt connection. Guests leaned into the celebration, with the atmosphere turning celebratory and lively as the evening unfolded. The couple’s style, the venue’s character, and the energy of the room came together in a way that felt both elevated and emotionally grounded.` },
+    { heading: "Closing", body: `The final stretch of the night held a sense of gratitude and wonder. ${title} and their partner were surrounded by loved ones, and the celebration closed with a feeling of ease, connection, and optimism. It was a day rooted in real emotion and carefully observed details, ending with a memory that felt intimate, polished, and unmistakably their own.` }
+  ],
+  recommended_image_slugs: ["wedding-story", `${venue.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`],
+  internal_link_suggestions: ["real weddings", "wedding photography pricing", "central florida wedding photographer"],
+  alt_text_suggestions: [`${title} with ${venue} in ${city}`, `${title} wedding day at ${venue}`]
+});
+
+const getMockFetch = (title: string, city: string, venue: string) =>
+  vi.fn(async () => ({
+    ok: true,
+    json: async () => ({
+      choices: [{ message: { content: JSON.stringify(mockBlogReply(title, city, venue)) } }]
+    })
+  }));
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   delete process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_GENERATION_MODEL;
+  API_CONFIG.openai.apiKey = undefined;
+  API_CONFIG.openai.generationModel = undefined;
+});
+
+beforeEach(() => {
+  process.env.OPENAI_API_KEY = "test-key";
+  process.env.OPENAI_GENERATION_MODEL = "gpt-4o-mini";
+  API_CONFIG.openai.apiKey = process.env.OPENAI_API_KEY;
+  API_CONFIG.openai.generationModel = process.env.OPENAI_GENERATION_MODEL;
 });
 
 vi.mock("./lib/google-docs.js", () => ({
@@ -23,13 +56,19 @@ const baselineFixtures = [
     name: "happy-path-orlando-venue",
     transcriptText:
       "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: sunset ceremony, candlelit dinner, packed dance floor. moments: private vows, confetti exit. portraits: soft lakeside portraits. weather: warm and clear. reception: crowded dance floor, heartfelt toasts.",
-    expectedTitleTerms: ["alex", "sam", "cypress", "orlando"]
+    expectedTitleTerms: ["alex", "sam", "cypress", "orlando"],
+    mockTitle: "Alex and Sam at Cypress Grove Estate House in Orlando, Florida",
+    mockVenue: "Cypress Grove Estate House",
+    mockCity: "Orlando, Florida"
   },
   {
     name: "central-florida-local-intent",
     transcriptText:
       "couple: Jamie and Riley. venue: Bella Collina. city: Montverde, Florida. style: editorial classic. timeline: chapel ceremony and lively reception. moments: first look, champagne tower. portraits: terrace portraits at sunset. weather: dry and breezy. reception: packed dance floor, live band.",
-    expectedTitleTerms: ["jamie", "riley", "bella", "montverde"]
+    expectedTitleTerms: ["jamie", "riley", "bella", "montverde"],
+    mockTitle: "Jamie and Riley at Bella Collina in Montverde, Florida",
+    mockVenue: "Bella Collina",
+    mockCity: "Montverde, Florida"
   }
 ];
 
@@ -59,6 +98,8 @@ describe("eval gates", () => {
         idempotencyKey: `eval-upload-${fixture.name}`
       });
 
+      vi.stubGlobal("fetch", getMockFetch(fixture.mockTitle, fixture.mockCity, fixture.mockVenue));
+
       await runPipeline({
         sessionId: session.sessionId,
         uploadToken: upload.uploadToken,
@@ -86,6 +127,8 @@ describe("eval gates", () => {
       sizeBytes: 2048,
       idempotencyKey: "eval-upload-editorial-depth"
     });
+
+    vi.stubGlobal("fetch", getMockFetch("Alex and Sam", "Orlando", "Cypress Grove Estate House"));
 
     await runPipeline({
       sessionId: session.sessionId,

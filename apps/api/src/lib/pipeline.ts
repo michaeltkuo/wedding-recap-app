@@ -125,22 +125,80 @@ function extractJsonFromModelContent(content: string) {
   return trimmed;
 }
 
+function buildEditorialArticlePrompt(recap: Recap) {
+  return `You are writing a real wedding recap for a premium editorial wedding blog. Use only the facts present in the transcript and do not invent details. The writing should feel warm, intimate, elevated, and emotionally rich—like a luxury wedding feature with a clear narrative arc, not a generic summary.
+
+Transcript facts:
+${JSON.stringify(recap, null, 2)}
+
+ARTICLE OBJECTIVE
+- Write a blog post of approximately 1000-1800 words total.
+- Keep the piece grounded in the real wedding details, but write it with a refined, cinematic, story-driven editorial voice inspired by premium wedding publications.
+- The tone should feel personal, elegant, and emotionally observant, with the sensory atmosphere of a luxury wedding feature.
+- The article should read like a real feature story for a brand that values aesthetic and emotional storytelling.
+
+ARTICLE STYLE RULES
+- Use a polished, warm, naturally conversational editorial tone.
+- Focus on emotional rhythm, venue character, meaningful moments, family dynamics, and the couple’s personality.
+- Avoid generic filler, vague praise, or template language.
+- Write with a clear narrative arc: opening atmosphere, ceremony, portraits, family/traditions, reception, closing reflection.
+- Do not invent vendors, decor, emotional beats, or story details not in the transcript.`;
+}
+
+function buildSeoBriefPrompt(recap: Recap) {
+  return `SEO BRIEF (STRICT)
+Use the following SEO intent and taxonomy constraints when producing the metadata and internal linking suggestions.
+
+Search intent goal:
+- Optimize for wedding story + venue + location + service intent.
+- Strong entity pattern: [couple names] at [venue] in [city, state] wedding photography and videography.
+- Prioritize actual location, venue, and service language that matches the real wedding facts.
+
+Brand taxonomy:
+- Favor relevant wedding photographer and videographer language when it is supported by the facts or by the site’s established categories.
+- Examples of acceptable service terms: wedding photographer, wedding videographer, Orlando wedding photographer, Central Florida wedding photographer, micro wedding photographer, destination wedding photographer.
+- Do not invent service terms that are not supported by the transcript or the brand’s actual offering.
+
+Search intent rules:
+- The title, meta description, H2 outline, slugs, alt text, and internal linking suggestions should reinforce real search intent.
+- Favor actual venue names, city/state names, and relevant service terminology.
+- Keep the language readable first and search-aware second.
+- Do not keyword-stuff or force terms that do not feel natural.
+
+Internal linking rules:
+- Recommend only internal pages that genuinely match the wedding story and brand taxonomy.
+- Good examples: venue pages, local area pages, wedding photography pricing, micro wedding pages, real weddings archive, contact page.
+- Do not suggest unrelated or random pages.
+- Internal links must still feel natural and human-sensible.
+
+Intent examples for this wedding:
+- [couple names] + [venue name] + [city, state]
+- [city, state] wedding photographer
+- [venue name] wedding venue + wedding photography
+- micro wedding photographer / wedding videographer in [city, state]
+
+Transcript facts:
+${JSON.stringify(recap, null, 2)}
+
+SEO OUTPUT CONSTRAINTS
+- Generate the title, meta description, H2 outline, recommended image slugs, internal link suggestions, and alt text from the same wedding facts and article narrative.
+- The primary title must include the couple names, the venue name, and the city/state.
+- recommended_image_slugs should be derived from the venue, city, and couple names and match the story and location intent.
+- internal_link_suggestions must use relevant internal pages only and should make sense to a human reader.
+- alt_text_suggestions must reflect the actual wedding story and location while remaining descriptive and SEO-safe.
+- Do not invent page names, links, or terms not logically related to the content.`;
+}
+
 async function generateBlogOutputWithAI(recap: Recap) {
   if (!API_CONFIG.openai.apiKey) {
     throw new Error("OPENAI_API_KEY is not configured. AI generation is required and cannot run without a generation key.");
   }
 
-  const prompt = `You are writing a real wedding recap for a premium editorial wedding blog. Use only the facts present in the transcript and do not invent details. The writing should feel warm, intimate, elevated, and emotionally rich—like a luxury wedding feature with a clear narrative arc, not a generic summary.
+  const prompt = `${buildEditorialArticlePrompt(recap)}
 
-Transcript facts:
-${JSON.stringify(recap, null, 2)}
+${buildSeoBriefPrompt(recap)}
 
-Goals:
-- Write a blog post of approximately 1000-1800 words total.
-- Keep the piece grounded in the real wedding details, but write it with a refined, cinematic, story-driven editorial voice inspired by premium wedding publications.
-- The tone should feel personal, elegant, and emotionally observant, with the sensory atmosphere of a luxury wedding feature.
-
-Requirements:
+FINAL OUTPUT REQUIREMENTS
 - Return valid JSON only.
 - The JSON must match this structure exactly:
   {
@@ -154,14 +212,8 @@ Requirements:
   }
 - Include exactly 5 H2 headings and 5 section blocks.
 - Target each section body at roughly 180-260 words, for a total piece in the 1000-1800 word range.
-- The primary_title must include the couple names, the venue name, and the city/state.
-- Generate the title, meta description, H2 outline, recommended image slugs, internal link suggestions, and alt text from the same wedding facts and article narrative.
-- Focus on atmosphere, emotional rhythm, venue character, meaningful moments, family dynamics, and the couple’s personality.
-- Use concrete details from the transcript only.
-- Avoid generic filler, vague praise, or template language.
-- Do not invent vendors, decor, emotional beats, or story details not in the transcript.
 - Do not include markdown fences.
-- Keep the writing polished, warm, and naturally conversational with a premium editorial feel.`;
+- Do not add unsupported details.`;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
