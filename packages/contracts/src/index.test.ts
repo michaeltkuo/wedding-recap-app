@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { BlogOutputSchema, PipelineStartRequestSchema, RecapSchema, SessionResultSchema, validateBlogTitle } from "./index";
+import {
+  BlogOutputSchema,
+  PipelineStartRequestSchema,
+  RecapSchema,
+  SessionResultSchema,
+  describeSupportedAudioFormats,
+  normalizeAudioUploadMimeType,
+  validateBlogTitle
+} from "./index";
 
 describe("contracts", () => {
   it("validates recap required fields", () => {
@@ -43,6 +51,18 @@ describe("contracts", () => {
         venue_city_state: "Orlando, Florida"
       })
     ).toBe(true);
+  });
+
+  it("normalizes common audio upload formats to supported mime types", () => {
+    expect(normalizeAudioUploadMimeType({ type: "audio/x-m4a", name: "recap.m4a" })).toBe("audio/mp4");
+    expect(normalizeAudioUploadMimeType({ type: "audio/m4a", name: "recap" })).toBe("audio/mp4");
+    expect(normalizeAudioUploadMimeType({ type: "", name: "recap.mp3" })).toBe("audio/mpeg");
+    expect(normalizeAudioUploadMimeType({ type: "text/plain", name: "notes.txt" })).toBeNull();
+  });
+
+  it("describes the supported upload formats", () => {
+    expect(describeSupportedAudioFormats()).toMatch(/WebM/i);
+    expect(describeSupportedAudioFormats()).toMatch(/M4A/i);
   });
 
   it("accepts follow-up retry payloads without upload token and transcript text", () => {
