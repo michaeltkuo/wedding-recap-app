@@ -83,37 +83,46 @@ function followUpPrompts(transcriptText: string): FollowUp[] {
   return prompts;
 }
 
-function buildRecap(transcriptText: string): Recap {
-  return RecapSchema.parse({
-    couple_names: extractField(transcriptText, "couple") ?? "",
-    venue_name: extractField(transcriptText, "venue") ?? "",
-    venue_city_state: extractField(transcriptText, "city") ?? "",
-    wedding_style: extractField(transcriptText, "style") ?? "documentary romantic",
-    timeline_summary: extractField(transcriptText, "timeline") ?? "Ceremony, portraits, and celebration flowed smoothly.",
-    signature_moments: (extractField(transcriptText, "moments") ?? "private vows, packed dance floor")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-    portrait_notes: extractField(transcriptText, "portraits") ?? "Portraits stayed relaxed and location-forward.",
-    weather_notes: extractField(transcriptText, "weather") ?? "Warm weather with soft evening light.",
-    vendor_notes: (extractField(transcriptText, "vendors") ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-    cultural_traditions: (extractField(transcriptText, "traditions") ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-    reception_highlights: (extractField(transcriptText, "reception") ?? "late-night dancing, heartfelt speeches")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
-  });
+function parseListField(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
-function formatList(values: string[] | undefined, fallback: string) {
-  const list = (values ?? []).filter(Boolean);
-  return list.length > 0 ? list.join(", ") : fallback;
+function chooseSoftFallbackString(transcriptText: string, label: string, fallback: string) {
+  return extractField(transcriptText, label) ?? fallback;
+}
+
+function buildRecap(transcriptText: string): Recap {
+  const signatureMoments = parseListField(extractField(transcriptText, "moments"));
+  const receptionHighlights = parseListField(extractField(transcriptText, "reception"));
+
+  return RecapSchema.parse({
+    couple_names: chooseSoftFallbackString(transcriptText, "couple", "Couple"),
+    venue_name: chooseSoftFallbackString(transcriptText, "venue", "The venue"),
+    venue_city_state: chooseSoftFallbackString(transcriptText, "city", "The location"),
+    wedding_style: chooseSoftFallbackString(transcriptText, "style", "intimate documentary"),
+    timeline_summary: chooseSoftFallbackString(
+      transcriptText,
+      "timeline",
+      "The day unfolded in a calm, intimate rhythm centered on the ceremony and portraits."
+    ),
+    signature_moments: signatureMoments.length > 0 ? signatureMoments : ["ceremony", "portraits"],
+    portrait_notes: chooseSoftFallbackString(
+      transcriptText,
+      "portraits",
+      "Portraits were relaxed and location-forward, shaped by the atmosphere of the day."
+    ),
+    weather_notes: chooseSoftFallbackString(
+      transcriptText,
+      "weather",
+      "The atmosphere carried a warm, natural feeling throughout the day."
+    ),
+    vendor_notes: parseListField(extractField(transcriptText, "vendors")),
+    cultural_traditions: parseListField(extractField(transcriptText, "traditions")),
+    reception_highlights: receptionHighlights.length > 0 ? receptionHighlights : ["celebration with family and friends"]
+  });
 }
 
 function extractJsonFromModelContent(content: string) {
@@ -126,13 +135,14 @@ function extractJsonFromModelContent(content: string) {
 }
 
 function buildEditorialArticlePrompt(recap: Recap) {
-  return `You are writing a real wedding recap for a premium editorial wedding blog. Use only the facts present in the transcript and do not invent details. The writing should feel warm, intimate, elevated, and emotionally rich—like a luxury wedding feature with a clear narrative arc, not a generic summary.
+  return `You are writing a real wedding recap for a premium editorial wedding blog. Use only the facts present in the transcript and do not invent details. If the transcript is sparse, shape a concise but elegant feature from the actual details available rather than forcing a reception, timeline, or vendor story that was never described.
 
 Transcript facts:
 ${JSON.stringify(recap, null, 2)}
 
 ARTICLE OBJECTIVE
-- Write a blog post of approximately 1000-1800 words total.
+- Write a blog post that feels premium, warm, intimate, and editorial.
+- Aim for 1000-1800 words when the details support it, but if the recording is more compact, write a thoughtful shorter feature instead of inventing missing story beats.
 - Keep the piece grounded in the real wedding details, but write it with a refined, cinematic, story-driven editorial voice inspired by premium wedding publications.
 - The tone should feel personal, elegant, and emotionally observant, with the sensory atmosphere of a luxury wedding feature.
 - The article should read like a real feature story for a brand that values aesthetic and emotional storytelling.
@@ -141,7 +151,7 @@ ARTICLE STYLE RULES
 - Use a polished, warm, naturally conversational editorial tone.
 - Focus on emotional rhythm, venue character, meaningful moments, family dynamics, and the couple’s personality.
 - Avoid generic filler, vague praise, or template language.
-- Write with a clear narrative arc: opening atmosphere, ceremony, portraits, family/traditions, reception, closing reflection.
+- Write with a clear narrative arc: opening atmosphere, ceremony, portraits, and closing reflection. Include a reception section only if it is supported by the transcript.
 - Do not invent vendors, decor, emotional beats, or story details not in the transcript.`;
 }
 
@@ -210,8 +220,8 @@ FINAL OUTPUT REQUIREMENTS
     "internal_link_suggestions": [string],
     "alt_text_suggestions": [string]
   }
-- Include exactly 5 H2 headings and 5 section blocks.
-- Target each section body at roughly 180-260 words, for a total piece in the 1000-1800 word range.
+- Use 4-5 H2 headings and 4-5 section blocks depending on how much real detail the transcript contains.
+- Keep the total article length within the 1000-1800 word range when details support it; if the story is more compact, prioritize clarity and grounded storytelling instead of forcing length.
 - Do not include markdown fences.
 - Do not add unsupported details.`;
 
@@ -445,7 +455,10 @@ export function runPipeline(request: unknown) {
     }
 
     const currentStage = sessionStore.getSession(parsed.sessionId).stage;
-    const nextStage: SessionStage = ["uploaded", "follow_up_required", "error"].includes(currentStage)
+    const hasDirectInput = Boolean(parsed.transcriptText && parsed.transcriptText.trim().length > 0);
+    const hasUploadedAudio = Boolean(upload?.filePath);
+    const nextStage: SessionStage = (currentStage === "idle" && (hasDirectInput || hasUploadedAudio))
+      || ["uploaded", "follow_up_required", "error"].includes(currentStage)
       ? "transcribing"
       : currentStage;
     sessionStore.updateStage(parsed.sessionId, transitionStage(currentStage, nextStage), 25);
