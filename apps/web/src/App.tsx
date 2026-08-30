@@ -55,8 +55,24 @@ export default function App() {
   const publishReady = useMemo(() => canPublish(checklist), [checklist]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googleAuthError = params.get("googleAuthError");
+    if (googleAuthError) {
+      setUiStage("error");
+      setStatusMessage(googleAuthError);
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("googleAuthError");
+      window.history.replaceState({}, "", nextUrl);
+    }
+
     void getGoogleAuthStatus()
-      .then((status) => setGoogleAuthStatus(status))
+      .then((status) => {
+        setGoogleAuthStatus(status);
+        if (params.get("googleAuth") === "connected") {
+          setUiStage("idle");
+          setStatusMessage("Google account connected. You can continue with the recap flow.");
+        }
+      })
       .catch(() => setGoogleAuthStatus(null));
   }, []);
 

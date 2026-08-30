@@ -60,6 +60,22 @@ async function waitForCompletion(app: ReturnType<typeof createApp>, sessionId: s
 }
 
 describe("api", () => {
+  it("uses the configured API base URL as the default OAuth redirect host", async () => {
+    const previousEnv = { ...process.env };
+
+    try {
+      delete process.env.GOOGLE_OAUTH_REDIRECT_URI;
+      process.env.API_BASE_URL = "http://127.0.0.1:8787";
+      vi.resetModules();
+
+      const { API_CONFIG: configuredApiConfig } = await import("./config.js");
+      expect(configuredApiConfig.google.redirectUri).toBe("http://127.0.0.1:8787/api/auth/google/callback");
+    } finally {
+      process.env = previousEnv;
+      vi.resetModules();
+    }
+  });
+
   it("reports Google auth status based on oauth env configuration", async () => {
     const app = createApp();
 
@@ -69,6 +85,44 @@ describe("api", () => {
     expect(response.status).toBe(200);
     expect(response.body.configured).toBe(expectedConfigured);
     expect(response.body.connected).toBe(false);
+  });
+
+  it("returns actionable Google OAuth diagnostics and local redirect guidance", async () => {
+    const app = createApp();
+
+    const response = await request(app).get("/api/auth/google/diagnostics");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      configured: expect.any(Boolean),
+      redirectUri: expect.any(String),
+      expectedRedirectUri: expect.any(String),
+      clientIdConfigured: expect.any(Boolean),
+      clientSecretConfigured: expect.any(Boolean)
+    });
+    expect(response.body.redirectUri).toBe(response.body.expectedRedirectUri);
+  });
+
+  it("maps callback state and code failures to actionable user guidance", async () => {
+    const app = createApp();
+
+    const stateMismatch = await request(app)
+      .get("/api/auth/google/callback")
+      .set("Accept", "application/json")
+      .query({ state: "returned-state", code: "mock-code" })
+      .set("Cookie", "wedding_google_oauth_state=expected-state");
+
+    expect(stateMismatch.status).toBe(400);
+    expect(stateMismatch.body.error).toMatch(/state.*redirect uri|redirect uri.*state|state did not match/i);
+
+    const missingCode = await request(app)
+      .get("/api/auth/google/callback")
+      .set("Accept", "application/json")
+      .query({ state: "expected-state" })
+      .set("Cookie", "wedding_google_oauth_state=expected-state");
+
+    expect(missingCode.status).toBe(400);
+    expect(missingCode.body.error).toMatch(/authorization code|missing code|code is missing/i);
   });
 
   it("rejects unsupported upload types", async () => {
