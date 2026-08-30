@@ -279,7 +279,8 @@ export function validateBlogTitle(title: string, recap: Pick<Recap, "couple_name
     .toLowerCase()
     .split(/\s+/)
     .some((token) => normalizedTitle.includes(token));
-  const venueOk = normalizedTitle.includes(recap.venue_name.toLowerCase()) || normalizedTitle.includes(recap.venue_city_state.toLowerCase());
+  const venueOk = normalizedTitle.includes(recap.venue_name.toLowerCase());
+  const cityOk = normalizedTitle.includes(recap.venue_city_state.toLowerCase());
 
-  return couplesOk && venueOk;
+  return couplesOk && venueOk && cityOk;
 }

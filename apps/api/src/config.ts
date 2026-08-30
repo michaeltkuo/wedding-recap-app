@@ -13,6 +13,33 @@ const port = Number(process.env.PORT ?? 8787);
 const defaultApiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:8787";
 const defaultGoogleRedirectUri = `${defaultApiBaseUrl.replace(/\/$/, "")}/api/auth/google/callback`;
 
+const openAiOverride = {
+  apiKey: undefined as string | undefined,
+  transcriptionModel: undefined as string | undefined,
+  generationModel: undefined as string | undefined
+};
+
+const openAiConfig = {
+  get apiKey() {
+    return openAiOverride.apiKey ?? process.env.OPENAI_API_KEY;
+  },
+  set apiKey(value: string | undefined) {
+    openAiOverride.apiKey = value;
+  },
+  get transcriptionModel() {
+    return openAiOverride.transcriptionModel ?? process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1";
+  },
+  set transcriptionModel(value: string | undefined) {
+    openAiOverride.transcriptionModel = value;
+  },
+  get generationModel() {
+    return openAiOverride.generationModel ?? process.env.OPENAI_GENERATION_MODEL ?? "gpt-4o-mini";
+  },
+  set generationModel(value: string | undefined) {
+    openAiOverride.generationModel = value;
+  }
+};
+
 export const API_CONFIG = {
   port,
   baseUrl: defaultApiBaseUrl,
@@ -40,10 +67,7 @@ export const API_CONFIG = {
     ttlSeconds: 900,
     allowedMimeTypes: ["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav"]
   },
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1"
-  },
+  openai: openAiConfig,
   googleDocs: {
     serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     serviceAccountPrivateKey: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,

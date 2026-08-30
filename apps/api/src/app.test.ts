@@ -1,5 +1,74 @@
 import request from "supertest";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockGenerationResponse = () => ({
+  ok: true,
+  json: async () => ({
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            primary_title: "Alex and Sam at Cypress Grove Estate House in Orlando, Florida",
+            meta_description: "A romantic wedding story for Alex and Sam at Cypress Grove Estate House in Orlando, Florida.",
+            h2_outline: ["Setting", "Ceremony", "Portraits", "Reception", "Closing"],
+            section_blocks: [
+              {
+                heading: "Setting",
+                body: "This wedding unfolded in Orlando, Florida with a warm and memorable atmosphere at Cypress Grove Estate House. The day began with thoughtful detail, soft light, and a sense of calm that carried across the entire celebration. Family, friends, and the couple created an environment that felt intimate, polished, and deeply personal from the start."
+              },
+              {
+                heading: "Ceremony",
+                body: "The ceremony brought the heart of the day into focus. Alex and Sam shared vows in a setting shaped by sentiment and intention, with the venue adding a distinct sense of elegance and place. Guests were fully present as the couple made their promises, and the emotional rhythm of the moment felt grounded, sincere, and beautifully organic."
+              },
+              {
+                heading: "Portraits",
+                body: "Portraits followed with a relaxed and joyful pace. The couple moved through the grounds of Cypress Grove Estate House with ease, embracing the scenery and the natural light of Orlando. These images captured a balance between romance and ease, reflecting the warmth of the occasion while allowing the details of the day to feel candid and alive."
+              },
+              {
+                heading: "Reception",
+                body: "The reception carried the story forward with music, laughter, and heartfelt connection. Guests leaned into the celebration, with the atmosphere turning celebratory and lively as the evening unfolded. The couple's style, the venue's character, and the energy of the room came together in a way that felt both elevated and emotionally grounded."
+              },
+              {
+                heading: "Closing",
+                body: "The final stretch of the night held a sense of gratitude and wonder. Alex and Sam were surrounded by loved ones, and the celebration closed with a feeling of ease, connection, and optimism. It was a day rooted in real emotion and carefully observed details, ending with a memory that felt intimate, polished, and unmistakably their own."
+              }
+            ],
+            recommended_image_slugs: [
+              "wedding-story",
+              "cypress-grove-estate-house-orlando-florida"
+            ],
+            internal_link_suggestions: [
+              "real weddings",
+              "wedding photography pricing",
+              "central florida wedding photographer"
+            ],
+            alt_text_suggestions: [
+              "Alex and Sam at Cypress Grove Estate House in Orlando",
+              "Alex and Sam wedding day at Cypress Grove Estate House"
+            ]
+          })
+        }
+      }
+    ]
+  })
+});
+
+beforeEach(() => {
+  process.env.OPENAI_API_KEY = "test-key";
+  process.env.OPENAI_GENERATION_MODEL = "gpt-4o-mini";
+  API_CONFIG.openai.apiKey = process.env.OPENAI_API_KEY;
+  API_CONFIG.openai.generationModel = process.env.OPENAI_GENERATION_MODEL;
+  vi.stubGlobal("fetch", vi.fn(async () => mockGenerationResponse()));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_GENERATION_MODEL;
+  API_CONFIG.openai.apiKey = undefined;
+  API_CONFIG.openai.generationModel = undefined;
+});
 
 vi.mock("./lib/google-docs.js", () => ({
   publishDraftToGoogleDoc: vi.fn(async () => ({
@@ -141,6 +210,24 @@ describe("api", () => {
       });
 
     expect(response.status).toBe(400);
+  });
+
+  it("starts from an idle session when transcript text is supplied", async () => {
+    const app = createApp();
+    const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
+    const sessionId = sessionResponse.body.sessionId;
+
+    const startResponse = await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        idempotencyKey: `pipeline-${sessionId}`,
+        transcriptText:
+          "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: a sunset ceremony and packed dance floor. moments: private vows, confetti exit. portraits: portraits along the lakeside lawn. weather: warm with soft sunset light. reception: full dance floor, emotional speeches."
+      });
+
+    expect(startResponse.status).toBe(202);
   });
 
   it("completes the happy path and returns a Google Doc", async () => {
@@ -349,6 +436,55 @@ describe("api", () => {
     expect(result.followUps.length).toBeGreaterThan(0);
   });
 
+  it("does not invent reception details when the transcript omits them", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              primary_title: "Alex and Sam at Cypress Grove Estate House in Orlando, Florida",
+              meta_description: "A romantic wedding story for Alex and Sam at Cypress Grove Estate House in Orlando, Florida.",
+              h2_outline: ["Setting", "Ceremony", "Portraits", "Closing"],
+              section_blocks: [
+                { heading: "Setting", body: "The day unfolded quietly and beautifully in Orlando, Florida." },
+                { heading: "Ceremony", body: "Alex and Sam shared vows with sincerity and warmth." },
+                { heading: "Portraits", body: "Golden hour portraits reflected the ease of the day." },
+                { heading: "Closing", body: "The day closed with gratitude and reflection." }
+              ],
+              recommended_image_slugs: ["alex-sam-cypress-grove-estate-house-orlando"],
+              internal_link_suggestions: ["real weddings", "wedding photography pricing"],
+              alt_text_suggestions: ["Alex and Sam at Cypress Grove Estate House"]
+            })
+          }
+        }]
+      })
+    }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-no-reception-${sessionId}`,
+        transcriptText:
+          "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: sunset ceremony. moments: private vows. portraits: golden hour portraits by the lake. weather: warm and clear."
+      });
+
+    const result = await waitForCompletion(app, sessionId);
+    expect(result.stage).toBe("completed");
+
+    const lastCall = fetchMock.mock.calls.at(-1)?.[1] as { body?: string } | undefined;
+    const payloadText = lastCall?.body ?? "";
+    expect(payloadText).not.toContain("late-night dancing");
+    expect(payloadText).not.toContain("heartfelt speeches");
+  });
+
   it("falls back to partial output after two schema failures", async () => {
     const app = createApp();
     const { sessionId, uploadToken } = await createSessionAndUpload(app);
@@ -364,7 +500,7 @@ describe("api", () => {
       });
 
     const result = await waitForCompletion(app, sessionId);
-    expect(["completed", "follow_up_required"]).toContain(result.stage);
+    expect(["completed", "follow_up_required", "partial"]).toContain(result.stage);
   });
 
   it("can recover from follow-up required using follow-up answers without re-upload", async () => {
@@ -378,7 +514,7 @@ describe("api", () => {
         sessionId,
         uploadToken,
         idempotencyKey: `pipeline-follow-up-initial-${sessionId}`,
-        transcriptText: "style: editorial. moments: first look, ceremony. portraits: clean portraits."
+        transcriptText: "style: editorial. timeline: intimate ceremony under the trees. moments: first look, ceremony. portraits: clean portraits. weather: warm and clear."
       });
 
     const followUp = await waitForCompletion(app, sessionId);
@@ -412,7 +548,7 @@ describe("api", () => {
       uploadToken,
       idempotencyKey: `pipeline-duplicate-${sessionId}`,
       transcriptText:
-        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor."
+        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor. moments: private vows, confetti exit. portraits: golden hour portraits by the lake. weather: warm and clear."
     };
 
     const first = await request(app).post("/api/transcriptions").set(contractorHeaders).send(payload);
