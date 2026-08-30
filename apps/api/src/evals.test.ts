@@ -104,6 +104,38 @@ describe("eval gates", () => {
     expect(hasNarrativeSignals).toBe(true);
   });
 
+  it("throws when no OpenAI generation key is configured", async () => {
+    const originalApiKey = API_CONFIG.openai.apiKey;
+    API_CONFIG.openai.apiKey = undefined;
+
+    try {
+      const session = await createSession(API_CONFIG.contractorToken);
+      const upload = signUpload({
+        sessionId: session.sessionId,
+        fileName: "no-key.webm",
+        mimeType: "audio/webm",
+        sizeBytes: 2048,
+        idempotencyKey: "eval-upload-no-key"
+      });
+
+      await expect(
+        runPipeline({
+          sessionId: session.sessionId,
+          uploadToken: upload.uploadToken,
+          idempotencyKey: "eval-pipeline-no-key",
+          transcriptText:
+            "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: sunset ceremony, candlelit dinner, packed dance floor. moments: private vows, confetti exit. portraits: golden hour portraits by the lake. weather: warm and clear. reception: heartfelt speeches, joyful dance floor."
+        })
+      ).resolves.toBeUndefined();
+
+      const result = await waitForCompletion(session.sessionId);
+      expect(result.stage).toBe("error");
+      expect(result.errorMessage).toMatch(/OPENAI_API_KEY|generation/i);
+    } finally {
+      API_CONFIG.openai.apiKey = originalApiKey;
+    }
+  });
+
   it("uses the OpenAI generation endpoint when a generation key is configured", async () => {
     const originalApiKey = process.env.OPENAI_API_KEY;
     const originalGenerationModel = process.env.OPENAI_GENERATION_MODEL;

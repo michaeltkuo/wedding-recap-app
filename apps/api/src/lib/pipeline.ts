@@ -116,63 +116,6 @@ function formatList(values: string[] | undefined, fallback: string) {
   return list.length > 0 ? list.join(", ") : fallback;
 }
 
-function buildBlogOutput(recap: Recap): BlogOutput {
-  const primary_title = `${recap.couple_names} ${recap.wedding_style} Wedding at ${recap.venue_name} in ${recap.venue_city_state}`;
-  const signatureMomentText = formatList(recap.signature_moments, "their meaningful wedding moments");
-  const receptionText = formatList(recap.reception_highlights, "a joyful celebration with heartfelt toasts and a full dance floor");
-  const vendorText = formatList(recap.vendor_notes, "thoughtful planning and design details");
-  const traditionText = formatList(recap.cultural_traditions, "personal traditions that made the day feel uniquely theirs");
-
-  const output = BlogOutputSchema.parse({
-    primary_title,
-    meta_description: `${recap.couple_names} celebrated a ${recap.wedding_style} wedding at ${recap.venue_name} in ${recap.venue_city_state}, with a warm, personal atmosphere and meaningful moments designed for a modern editorial wedding feature.`,
-    h2_outline: [
-      "The Wedding Day Setting",
-      "Ceremony Highlights",
-      "Portraits and Venue Moments",
-      "Family, Traditions, and Personal Details",
-      "Reception Energy and Final Impressions"
-    ],
-    section_blocks: [
-      {
-        heading: "The Wedding Day Setting",
-        body: `${recap.couple_names} chose ${recap.venue_name} in ${recap.venue_city_state} as the backdrop for a ${recap.wedding_style} celebration that felt polished, relaxed, and deeply personal. The setting gave the day an unmistakable sense of place, offering a location that supported both the ceremony atmosphere and the overall story of their wedding day. From the moment guests arrived, the couple’s style and priorities were clear. Every detail worked in service of a meaningful celebration rooted in connection, beauty, and a natural flow from one moment to the next, creating a wedding that felt both elevated and emotionally honest from the very start.`
-      },
-      {
-        heading: "Ceremony Highlights",
-        body: `The ceremony unfolded through ${recap.timeline_summary}, with the couple’s focus on emotion and intention creating a memorable start to the day. Standout moments included ${signatureMomentText}, which gave the event the kind of energy that feels both intimate and cinematic. Rather than relying on excess or show, the couple let the meaningful details do the work, allowing the vows, the pacing, and the emotional atmosphere to take center stage. The result was a ceremony that felt beautifully grounded in sincerity while still carrying the visual polish and sense of occasion that made the day feel distinctly editorial.`
-      },
-      {
-        heading: "Portraits and Venue Moments",
-        body: `${recap.portrait_notes} The pacing of the day allowed these portraits to feel natural rather than forced, with ${recap.weather_notes.toLowerCase()} helping the photos carry a warm, flattering mood. Whether it was a quiet stretch before the celebration or a more active moment around the property, the couple’s interactions felt effortless and genuine. That kind of atmosphere is what makes a wedding feel timeless: not a set of staged poses, but a sequence of authentic moments that reflect how the couple really felt in the middle of the celebration, surrounded by the beauty of their venue and the calm of the evening light.`
-      },
-      {
-        heading: "Family, Traditions, and Personal Details",
-        body: `The details that made this wedding feel personal were the ones that told the story best. ${traditionText} became part of the day in a way that felt organic and meaningful, while the couple’s family and closest loved ones shaped the emotional texture of the celebration. These touches gave the event more depth than a simple venue summary ever could, turning a beautiful wedding into a memorable one. It is those lived-in moments—shared laughter, quiet tears, family involvement, and careful planning—that make a day feel distinct and unforgettable, offering a portrait of love that feels both intimate and deeply rooted in the people who matter most.`
-      },
-      {
-        heading: "Reception Energy and Final Impressions",
-        body: `The reception brought the celebration into full focus, with ${receptionText} creating a lively and heartfelt atmosphere that felt true to the couple’s energy. Guests were clearly invested in the experience, and the overall mood balanced joy, elegance, and ease. The evening felt like the natural culmination of everything that came before it: thoughtful design, a strong sense of place, and a couple who clearly wanted to celebrate in a way that was rooted in real connection. In the end, this wedding was memorable not because it tried to be anything more than itself, but because every detail, from the venue to the final dance, felt sincere, warm, and beautifully personal. ${vendorText} helped bring the vision fully to life and left a lasting impression of a day that was both joyful and deeply considered.`
-      }
-    ],
-    recommended_image_slugs: [
-      `${recap.venue_city_state.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${recap.venue_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-wedding`,
-      `${recap.couple_names.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${recap.venue_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-portraits`
-    ],
-    internal_link_suggestions: ["Orlando wedding photography", "Central Florida wedding venues"],
-    alt_text_suggestions: [
-      `${recap.couple_names} at ${recap.venue_name}`,
-      `${recap.venue_name} wedding portraits in ${recap.venue_city_state}`
-    ]
-  });
-
-  if (!validateBlogTitle(output.primary_title, recap)) {
-    throw new Error("Generated blog title failed validation");
-  }
-
-  return output;
-}
-
 function extractJsonFromModelContent(content: string) {
   const trimmed = content.trim();
   const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
@@ -184,7 +127,7 @@ function extractJsonFromModelContent(content: string) {
 
 async function generateBlogOutputWithAI(recap: Recap) {
   if (!API_CONFIG.openai.apiKey) {
-    return buildBlogOutput(recap);
+    throw new Error("OPENAI_API_KEY is not configured. AI generation is required and cannot run without a generation key.");
   }
 
   const prompt = `You are writing a real editorial wedding recap for a wedding blog. Use only the details present in the transcript and do not invent facts. Keep the output grounded in the real wedding facts, but write in a polished, warm, story-driven editorial style similar to a premium wedding blog.
