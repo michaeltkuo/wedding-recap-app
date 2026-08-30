@@ -10,10 +10,12 @@ loadEnv({ path: repoRootEnvPath });
 loadEnv();
 
 const port = Number(process.env.PORT ?? 8787);
+const defaultApiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:8787";
+const defaultGoogleRedirectUri = `${defaultApiBaseUrl.replace(/\/$/, "")}/api/auth/google/callback`;
 
 export const API_CONFIG = {
   port,
-  baseUrl: process.env.API_BASE_URL ?? "http://127.0.0.1:8787",
+  baseUrl: defaultApiBaseUrl,
   contractorToken: process.env.CONTRACTOR_TOKEN ?? "demo-contractor-token",
   storageDir: process.env.STORAGE_DIR ?? ".data",
   sqlitePath: process.env.SQLITE_PATH ?? ".data/wedding-recap.sqlite",
@@ -23,7 +25,7 @@ export const API_CONFIG = {
   google: {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? "",
     clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
-    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? `http://127.0.0.1:${port}/api/auth/google/callback`,
+    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? defaultGoogleRedirectUri,
     docFolderId: process.env.GOOGLE_DOC_FOLDER_ID ?? "",
     scopes: [
       "openid",

@@ -79,6 +79,8 @@ See [docs/API.md](docs/API.md) for request and response details.
 ## Important Notes
 
 - OAuth is the primary Google Docs publishing path. Configure Google OAuth in `.env` before using publish in local beta.
+- This project standardizes on `http://127.0.0.1:8787` for local API callbacks. Do not mix `localhost` and `127.0.0.1`; Google treats them as distinct origins and issue #7 was caused by that mismatch.
+- For local OAuth, register `http://127.0.0.1:8787/api/auth/google/callback` in your Google OAuth client redirect URIs, or set `GOOGLE_OAUTH_REDIRECT_URI` explicitly.
 - The pipeline is strict by design: missing required inputs or misconfiguration surfaces explicit error/follow-up states instead of simulated success fallbacks.
 - Contracts are the source of truth. Update shared schemas in `packages/contracts/src/index.ts` first when changing payload shapes.
 - QA artifacts are written under `.gstack/qa-reports/`.

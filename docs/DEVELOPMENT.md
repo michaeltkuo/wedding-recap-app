@@ -70,7 +70,7 @@ Google Docs publishing requires OAuth configuration in local beta:
 
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URI` (defaults to `http://localhost:8787/api/auth/google/callback`)
+- `GOOGLE_OAUTH_REDIRECT_URI` (standardized to `http://127.0.0.1:8787/api/auth/google/callback` for this repo)
 - `GOOGLE_DOC_FOLDER_ID` (optional)
 - `WEB_ORIGIN` (defaults to `http://127.0.0.1:4173`)
 
@@ -78,26 +78,17 @@ Google Docs publishing requires OAuth configuration in local beta:
 
 This repo uses Google OAuth in local beta. The most common failure is `redirect_uri_mismatch`, which occurs when the URL registered in Google Cloud does not exactly match the callback URL the app generates.
 
-### Use one canonical localhost host
+This issue was the root cause behind issue #7: the app and Google Console were using different hosts (`localhost` vs `127.0.0.1`), which caused Google to reject the callback even though the app itself looked otherwise valid.
 
-Pick one and use it everywhere for the local stack:
+### Use one canonical loopback host
 
-- Option A: `http://localhost:8787`
-- Option B: `http://127.0.0.1:8787`
+This repo standardizes on `http://127.0.0.1:8787` for local API callbacks.
 
-Do not mix them across the app, browser, and Google Console. Google treats `localhost` and `127.0.0.1` as different origins.
+Do not mix `localhost` and `127.0.0.1` across the app, browser, and Google Console. Google treats them as different origins.
 
 ### Recommended local env values
 
-For a localhost-only setup, set the following explicitly in `.env`:
-
-```bash
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8787/api/auth/google/callback
-WEB_ORIGIN=http://127.0.0.1:4173
-VITE_API_BASE_URL=http://127.0.0.1:8787
-```
-
-If you prefer loopback-only values instead, use this version instead:
+Use these values consistently in `.env`:
 
 ```bash
 GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8787/api/auth/google/callback

@@ -60,6 +60,22 @@ async function waitForCompletion(app: ReturnType<typeof createApp>, sessionId: s
 }
 
 describe("api", () => {
+  it("uses the configured API base URL as the default OAuth redirect host", async () => {
+    const previousEnv = { ...process.env };
+
+    try {
+      delete process.env.GOOGLE_OAUTH_REDIRECT_URI;
+      process.env.API_BASE_URL = "http://127.0.0.1:8787";
+      vi.resetModules();
+
+      const { API_CONFIG: configuredApiConfig } = await import("./config.js");
+      expect(configuredApiConfig.google.redirectUri).toBe("http://127.0.0.1:8787/api/auth/google/callback");
+    } finally {
+      process.env = previousEnv;
+      vi.resetModules();
+    }
+  });
+
   it("reports Google auth status based on oauth env configuration", async () => {
     const app = createApp();
 
