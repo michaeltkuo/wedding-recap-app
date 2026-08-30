@@ -464,15 +464,19 @@ export function runPipeline(request: unknown) {
         await logSessionAttempt(parsed.sessionId, "publish", 1, false, reason);
         const currentStage = sessionStore.getSession(parsed.sessionId).stage;
         const nextStage = transitionStage(currentStage, "error");
+        const uploadSucceeded = currentStage !== "idle" && currentStage !== "recording";
+        const errorMessage = uploadSucceeded && /transcription/i.test(reason)
+          ? `Upload succeeded, but transcription failed: ${reason}`
+          : reason;
         sessionStore.updateSession(parsed.sessionId, {
           retryMetadata: {
             ...sessionStore.getSession(parsed.sessionId).retryMetadata,
-            lastFailureReason: reason
+            lastFailureReason: errorMessage
           }
         });
-        sessionStore.updateStage(parsed.sessionId, nextStage, 100, reason);
-        await logSessionStageTransition(parsed.sessionId, currentStage, "error", reason);
-        await logSessionFinal(parsed.sessionId, "error", false, reason);
+        sessionStore.updateStage(parsed.sessionId, nextStage, 100, errorMessage);
+        await logSessionStageTransition(parsed.sessionId, currentStage, "error", errorMessage);
+        await logSessionFinal(parsed.sessionId, "error", false, errorMessage);
       }
     });
   });

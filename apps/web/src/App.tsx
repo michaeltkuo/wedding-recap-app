@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { SessionEvent, SessionResult } from "@wedding/contracts";
+import { describeSupportedAudioFormats, normalizeAudioUploadMimeType, type SessionEvent, type SessionResult } from "@wedding/contracts";
 
 import type { GoogleAuthStatus } from "./api";
 import { createSession, getGoogleAuthStartUrl, getGoogleAuthStatus, getSession, getTimeline, signUpload, startPipeline, uploadAudio } from "./api";
 import { canPublish, transitionUiStage, type ApprovalChecklist, type UiStage } from "./sessionMachine";
 
-const allowedMimeTypes = new Set(["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav"]);
 const preferredRecordingMimeTypes = ["audio/webm", "audio/mp4"] as const;
 
 function pickSupportedRecordingMimeType() {
@@ -35,6 +34,10 @@ const defaultChecklist: ApprovalChecklist = {
   noOpenGaps: true
 };
 
+function getUploadMimeType(file: File) {
+  return normalizeAudioUploadMimeType(file);
+}
+
 export default function App() {
   const [uiStage, setUiStage] = useState<UiStage>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -46,6 +49,7 @@ export default function App() {
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
   const [checklist, setChecklist] = useState<ApprovalChecklist>(defaultChecklist);
   const [isRecording, setIsRecording] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -136,35 +140,42 @@ export default function App() {
 
   async function submit(file: File, followUps?: Record<string, string>) {
     const nextSessionId = await ensureSessionId();
+    const mimeType = getUploadMimeType(file);
 
-    if (!allowedMimeTypes.has(file.type)) {
+    if (!mimeType) {
       setUiStage("error");
-      setStatusMessage("Unsupported upload type. Use webm, mp4, mp3, or wav audio.");
+      setStatusMessage(`${describeSupportedAudioFormats()} Re-encode the file if it came from an editor export or phone recording.`);
       return;
     }
 
-    setUiStage(transitionUiStage(uiStage === "follow_up_required" || uiStage === "partial" || uiStage === "error" ? uiStage : "idle", "uploading"));
-    setStatusMessage("Signing upload and sending recap audio.");
+    setIsUploading(true);
 
-    const upload = await signUpload({
-      sessionId: nextSessionId,
-      fileName: file.name || "recap.webm",
-      mimeType: file.type as "audio/webm" | "audio/mp4" | "audio/mpeg" | "audio/wav",
-      sizeBytes: file.size,
-      idempotencyKey: `upload-${nextSessionId}-${Date.now()}`
-    });
+    try {
+      setUiStage(transitionUiStage(uiStage === "follow_up_required" || uiStage === "partial" || uiStage === "error" ? uiStage : "idle", "uploading"));
+      setStatusMessage(`Signing upload for ${file.name || "recap audio"}.`);
 
-    await uploadAudio(upload.uploadUrl, file);
+      const upload = await signUpload({
+        sessionId: nextSessionId,
+        fileName: file.name || "recap.webm",
+        mimeType,
+        sizeBytes: file.size,
+        idempotencyKey: `upload-${nextSessionId}-${Date.now()}`
+      });
 
-    setUiStage(transitionUiStage("uploading", "processing"));
-    setStatusMessage("Transcribing and drafting the Google Doc.");
+      await uploadAudio(upload.uploadUrl, file);
 
-    await startPipeline({
-      sessionId: nextSessionId,
-      uploadToken: upload.uploadToken,
-      idempotencyKey: `pipeline-${nextSessionId}-${Date.now()}`,
-      followUpAnswers: followUps
-    });
+      setUiStage(transitionUiStage("uploading", "processing"));
+      setStatusMessage("Upload complete. Transcribing audio now.");
+
+      await startPipeline({
+        sessionId: nextSessionId,
+        uploadToken: upload.uploadToken,
+        idempotencyKey: `pipeline-${nextSessionId}-${Date.now()}`,
+        followUpAnswers: followUps
+      });
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   async function startRecording() {
@@ -299,14 +310,38 @@ export default function App() {
                 <input
                   data-testid="audio-input"
                   type="file"
-                  accept="audio/*"
+                  accept=".webm,.mp4,.m4a,.mp3,.wav,audio/webm,audio/mp4,audio/mpeg,audio/wav"
                   className="mt-2 block w-full rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white"
-                  onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                  onChange={(event) => {
+                    const nextFile = event.target.files?.[0] ?? null;
+                    setSelectedFile(nextFile);
+
+                    if (!nextFile) {
+                      setStatusMessage("Select an audio file first.");
+                      return;
+                    }
+
+                    const nextMimeType = getUploadMimeType(nextFile);
+                    setStatusMessage(
+                      nextMimeType
+                        ? `Selected ${nextFile.name || "audio file"}. ${describeSupportedAudioFormats()}`
+                        : `${nextFile.name || "This file"} is not in the supported upload set.`
+                    );
+                  }}
                 />
+                <p className="mt-2 text-xs leading-5 text-[#e8d5c6]">
+                  {describeSupportedAudioFormats()} Supported files can still fail if the recording is corrupt or needs re-encoding.
+                </p>
+                {selectedFile ? (
+                  <p className="mt-2 text-xs font-medium text-[#f5d1ae]">
+                    Selected: {selectedFile.name} {selectedFile.type ? `(${selectedFile.type})` : "(mime unknown)"}
+                  </p>
+                ) : null}
               </label>
 
               <button
-                className="mt-4 w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-sm font-semibold"
+                className="mt-4 w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isUploading}
                 onClick={() => {
                   if (!selectedFile) {
                     setStatusMessage("Select an audio file first.");

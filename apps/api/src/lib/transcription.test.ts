@@ -49,6 +49,21 @@ describe("transcription", () => {
     await expect(transcribeAudioFile("/tmp/clip.webm", "audio/webm")).rejects.toThrow(/Whisper transcription failed \(401\): invalid token/);
   });
 
+  it("adds decode guidance for malformed audio payloads", async () => {
+    const { transcribeAudioFile } = await loadModuleWithApiKey("test-key");
+    vi.spyOn(fs.promises, "readFile").mockResolvedValue(Buffer.from("audio"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 422,
+        text: async () => "invalid file format"
+      }))
+    );
+
+    await expect(transcribeAudioFile("/tmp/clip.m4a", "audio/mp4")).rejects.toThrow(/re-encode it to WAV or MP4 and retry/i);
+  });
+
   it("returns normalized transcription text on success", async () => {
     const { transcribeAudioFile } = await loadModuleWithApiKey("test-key");
     vi.spyOn(fs.promises, "readFile").mockResolvedValue(Buffer.from("audio"));

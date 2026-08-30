@@ -7,6 +7,46 @@ export const SupportedMimeTypes = [
   "audio/wav"
 ] as const;
 
+const SupportedMimeTypeSet = new Set<string>(SupportedMimeTypes);
+
+const SupportedAudioExtensions: Record<string, (typeof SupportedMimeTypes)[number]> = {
+  ".webm": "audio/webm",
+  ".mp4": "audio/mp4",
+  ".m4a": "audio/mp4",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav"
+};
+
+const SupportedAudioMimeAliases: Record<string, (typeof SupportedMimeTypes)[number]> = {
+  "audio/x-m4a": "audio/mp4",
+  "audio/m4a": "audio/mp4",
+  "audio/x-wav": "audio/wav",
+  "audio/x-mp3": "audio/mpeg",
+  "audio/x-webm": "audio/webm"
+};
+
+export function isSupportedAudioMimeType(mimeType: string) {
+  return SupportedMimeTypeSet.has(mimeType);
+}
+
+export function normalizeAudioUploadMimeType(file: { type?: string; name?: string }) {
+  const mimeType = file.type?.toLowerCase().trim();
+  if (mimeType && isSupportedAudioMimeType(mimeType)) {
+    return mimeType as (typeof SupportedMimeTypes)[number];
+  }
+
+  if (mimeType && SupportedAudioMimeAliases[mimeType]) {
+    return SupportedAudioMimeAliases[mimeType];
+  }
+
+  const extension = file.name?.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
+  return extension ? SupportedAudioExtensions[extension] ?? null : null;
+}
+
+export function describeSupportedAudioFormats() {
+  return "Supported: WebM (.webm), MP4/M4A (.mp4, .m4a), MP3 (.mp3), and WAV (.wav).";
+}
+
 export const SessionStageSchema = z.enum([
   "idle",
   "recording",
