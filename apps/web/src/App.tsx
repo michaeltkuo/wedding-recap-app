@@ -1,361 +1,653 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import {
+  BookmarkPlus,
+  Check,
+  CircleAlert,
+  CircleHelp,
+  FileAudio,
+  FileText,
+  Library,
+  LoaderCircle,
+  Mic,
+  Pause,
+  Play,
+  Send,
+  Settings2,
+  Upload,
+  Volume2,
+  X
+} from "lucide-react";
 
-import type { GoogleAuthStatus, SessionResult } from "@wedding/contracts";
+import type { Recap, SessionResult } from "@wedding/contracts";
 
-import { createSession, getGoogleAuthStartUrl, getGoogleAuthStatus, getSession, signUpload, startPipeline } from "./api";
-import { canPublish, transitionUiStage, type ApprovalChecklist, type UiStage } from "./sessionMachine";
+import { createSession, getSession, publishSession, signUpload, startPipeline, uploadAudio } from "./api";
+import { transitionUiStage, type UiStage } from "./sessionMachine";
+import { useAudioRecorder } from "./useAudioRecorder";
 
-const defaultTranscript = [
-  "couple: Alex and Sam.",
-  "venue: Cypress Grove Estate House.",
-  "city: Orlando, Florida.",
-  "style: romantic garden.",
-  "timeline: sunset ceremony, candlelit dinner, packed dance floor.",
-  "moments: private vows, confetti exit.",
-  "portraits: soft lakeside portraits.",
-  "weather: warm and clear.",
-  "reception: crowded dance floor, heartfelt toasts."
-].join(" ");
+type EventDetails = {
+  dateLabel: string;
+  coupleNames: string;
+  venueName: string;
+  cityState: string;
+};
+
+type LibraryStatus = "shaping" | "ready" | "sent" | "retry";
+
+type LibraryEntry = {
+  sessionId: string;
+  title: string;
+  subtitle: string;
+  createdAt: string;
+  status: LibraryStatus;
+  googleDocUrl?: string;
+};
+
+type View = "capture" | "library";
+
+const historyStorageKey = "recap-studio-history";
+
+const defaultEvent: EventDetails = {
+  dateLabel: "Saturday, September 7",
+  coupleNames: "Alex + Sam",
+  venueName: "Cypress Grove Estate House",
+  cityState: "Orlando, Florida"
+};
 
 const allowedMimeTypes = new Set(["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav"]);
 
-const defaultChecklist: ApprovalChecklist = {
-  factualAccuracy: true,
-  brandVoice: true,
-  seoStructure: true,
-  imageSlugs: true,
-  noOpenGaps: true
-};
+const storyCues = [
+  "Where did the day begin, and what did the setting feel like?",
+  "Which moment best captured the couple together?",
+  "What made the ceremony feel like them?",
+  "What shifted when the reception opened up?"
+];
 
-const followUpLabelMap: Record<string, string> = {
+const followUpTranscriptLabels: Record<string, string> = {
   couple_names: "couple",
   venue_name: "venue",
   venue_city_state: "city"
 };
 
-type Scenario = "normal" | "missing_fields" | "invalid_twice" | "queued";
+const waveHeights = [24, 44, 66, 34, 78, 108, 58, 128, 84, 42, 92, 146, 72, 54, 120, 76, 38, 108, 66, 88, 48, 74, 34, 58, 28];
+
+function buildTranscriptSeed(eventDetails: EventDetails) {
+  return [
+    `couple: ${eventDetails.coupleNames}.`,
+    `venue: ${eventDetails.venueName}.`,
+    `city: ${eventDetails.cityState}.`,
+    "style: documentary romantic.",
+    "timeline: a thoughtful ceremony, relaxed portraits, and a full dance floor.",
+    "moments: private vows, a confetti exit.",
+    "portraits: relaxed portraits around the venue at sunset.",
+    "weather: warm with soft evening light.",
+    "reception: heartfelt toasts and a packed dance floor."
+  ].join(" ");
+}
+
+function normalizeAudioMimeType(audio: Blob, fileName?: string) {
+  const fromBlob = audio.type.split(";", 1)[0]?.trim().toLowerCase();
+  if (fromBlob && allowedMimeTypes.has(fromBlob)) {
+    return fromBlob;
+  }
+
+  const extension = fileName?.split(".").pop()?.toLowerCase();
+  const fromExtension: Record<string, string> = {
+    webm: "audio/webm",
+    m4a: "audio/mp4",
+    mp4: "audio/mp4",
+    mp3: "audio/mpeg",
+    wav: "audio/wav"
+  };
+  const inferredMimeType = extension ? fromExtension[extension] : undefined;
+  return inferredMimeType && allowedMimeTypes.has(inferredMimeType) ? inferredMimeType : undefined;
+}
+
+function extensionForMimeType(mimeType: string) {
+  return (
+    {
+      "audio/webm": "webm",
+      "audio/mp4": "m4a",
+      "audio/mpeg": "mp3",
+      "audio/wav": "wav"
+    }[mimeType] ?? "webm"
+  );
+}
+
+function formatDuration(elapsedMs: number) {
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function getHistory() {
+  if (typeof window === "undefined") {
+    return [] as LibraryEntry[];
+  }
+
+  try {
+    const stored = window.localStorage.getItem(historyStorageKey);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? (parsed as LibraryEntry[]) : [];
+  } catch {
+    return [] as LibraryEntry[];
+  }
+}
+
+function persistHistory(history: LibraryEntry[]) {
+  try {
+    window.localStorage.setItem(historyStorageKey, JSON.stringify(history));
+  } catch {
+    return;
+  }
+}
+
+function historyEntry(sessionId: string, eventDetails: EventDetails, status: LibraryStatus, recap?: Recap, googleDocUrl?: string): LibraryEntry {
+  const title = recap?.couple_names || eventDetails.coupleNames || "Untitled recap";
+  const venue = recap?.venue_name || eventDetails.venueName || "Wedding recap";
+  const city = recap?.venue_city_state || eventDetails.cityState;
+  return {
+    sessionId,
+    title,
+    subtitle: city ? `${venue} / ${city}` : venue,
+    createdAt: new Date().toISOString(),
+    status,
+    googleDocUrl
+  };
+}
+
+function Waveform({ level, compact = false }: { level: number; compact?: boolean }) {
+  const size = compact ? 17 : 31;
+  return (
+    <div className={`waveform ${compact ? "waveform-compact" : ""}`} aria-hidden="true">
+      {Array.from({ length: size }, (_, index) => {
+        const baseHeight = waveHeights[index % waveHeights.length];
+        const variation = 0.36 + level * 0.64 * (index % 3 === 0 ? 1 : 0.8);
+        return <span key={index} style={{ height: `${Math.max(5, Math.round(baseHeight * variation))}px` }} />;
+      })}
+    </div>
+  );
+}
+
+function CoverageMap({ recap }: { recap?: Recap }) {
+  const coverage = [
+    {
+      label: "Setting",
+      value: recap?.venue_name && recap.venue_city_state ? `${recap.venue_name}, ${recap.venue_city_state}` : "Not found in this recap",
+      complete: Boolean(recap?.venue_name && recap.venue_city_state)
+    },
+    {
+      label: "Ceremony",
+      value: recap?.timeline_summary ?? "Not found in this recap",
+      complete: Boolean(recap?.timeline_summary)
+    },
+    {
+      label: "Portraits",
+      value: recap?.portrait_notes ?? "Not found in this recap",
+      complete: Boolean(recap?.portrait_notes)
+    },
+    {
+      label: "Reception",
+      value: recap?.reception_highlights?.join(", ") ?? "Not found in this recap",
+      complete: Boolean(recap?.reception_highlights?.length)
+    },
+    {
+      label: "Weather",
+      value: recap?.weather_notes ?? "Not found in this recap",
+      complete: Boolean(recap?.weather_notes)
+    }
+  ];
+
+  return (
+    <div className="coverage-map">
+      {coverage.map((item) => (
+        <div className="coverage-row" key={item.label}>
+          <span className={`coverage-icon ${item.complete ? "is-complete" : "is-open"}`} aria-hidden="true">
+            {item.complete ? <Check size={14} /> : <CircleAlert size={14} />}
+          </span>
+          <strong>{item.label}</strong>
+          <p>{item.value}</p>
+          <span className={`coverage-status ${item.complete ? "is-complete" : "is-open"}`}>{item.complete ? "Captured" : "Open"}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AppNavigation({
+  view,
+  onCapture,
+  onLibrary,
+  onHelp
+}: {
+  view: View;
+  onCapture: () => void;
+  onLibrary: () => void;
+  onHelp: () => void;
+}) {
+  return (
+    <>
+      <aside className="desktop-rail">
+        <div className="wordmark"><span>R</span>REC / STUDIO</div>
+        <nav aria-label="Application">
+          <button className={view === "capture" ? "is-active" : ""} type="button" onClick={onCapture}>
+            <Mic size={17} />
+            Capture
+          </button>
+          <button className={view === "library" ? "is-active" : ""} type="button" onClick={onLibrary}>
+            <Library size={17} />
+            Library
+          </button>
+          <button type="button" onClick={onHelp}>
+            <CircleHelp size={17} />
+            Help
+          </button>
+        </nav>
+        <div className="delivery-desk">
+          <p>Delivery desk</p>
+          <strong>michael@authormadephoto.com</strong>
+        </div>
+      </aside>
+      <nav className="mobile-nav" aria-label="Application">
+        <button className={view === "capture" ? "is-active" : ""} type="button" onClick={onCapture}>
+          <Mic size={18} />
+          <span>Capture</span>
+        </button>
+        <button className={view === "library" ? "is-active" : ""} type="button" onClick={onLibrary}>
+          <Library size={18} />
+          <span>Library</span>
+        </button>
+        <button type="button" onClick={onHelp}>
+          <CircleHelp size={18} />
+          <span>Help</span>
+        </button>
+      </nav>
+    </>
+  );
+}
 
 export default function App() {
-  const [uiStage, setUiStage] = useState<UiStage>("idle");
+  const [uiStage, setUiStage] = useState<UiStage>("ready");
+  const [view, setView] = useState<View>("capture");
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState("Ready to capture a contractor recap.");
-  const [transcriptText, setTranscriptText] = useState(defaultTranscript);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [scenario, setScenario] = useState<Scenario>("normal");
   const [result, setResult] = useState<SessionResult | null>(null);
-  const [googleAuthStatus, setGoogleAuthStatus] = useState<GoogleAuthStatus | null>(null);
+  const [eventDetails, setEventDetails] = useState<EventDetails>(defaultEvent);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [capturedAudio, setCapturedAudio] = useState<Blob | null>(null);
+  const [statusMessage, setStatusMessage] = useState("Ready to capture your field note.");
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
-  const [checklist, setChecklist] = useState<ApprovalChecklist>(defaultChecklist);
-  const intervalRef = useRef<number | null>(null);
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
+  const [cueIndex, setCueIndex] = useState(0);
+  const [markedMoments, setMarkedMoments] = useState(0);
+  const [history, setHistory] = useState<LibraryEntry[]>(getHistory);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recorder = useAudioRecorder();
 
-  const deferredTranscript = useDeferredValue(transcriptText);
-  const publishReady = useMemo(() => canPublish(checklist), [checklist]);
+  function transitionTo(nextStage: UiStage) {
+    setUiStage((currentStage) => (currentStage === nextStage ? currentStage : transitionUiStage(currentStage, nextStage)));
+  }
 
-  useEffect(() => {
-    void getGoogleAuthStatus()
-      .then((status) => setGoogleAuthStatus(status))
-      .catch(() => setGoogleAuthStatus(null));
-  }, []);
+  function upsertHistory(nextEntry: LibraryEntry) {
+    setHistory((currentHistory) => {
+      const nextHistory = [nextEntry, ...currentHistory.filter((entry) => entry.sessionId !== nextEntry.sessionId)].slice(0, 30);
+      persistHistory(nextHistory);
+      return nextHistory;
+    });
+  }
 
-  useEffect(() => {
+  function updateSessionHistory(status: LibraryStatus, nextResult?: SessionResult) {
     if (!sessionId) {
       return;
     }
+    upsertHistory(historyEntry(sessionId, eventDetails, status, nextResult?.recap, nextResult?.googleDoc?.url));
+  }
 
-    intervalRef.current = window.setInterval(async () => {
+  useEffect(() => {
+    if (!sessionId || (uiStage !== "processing" && uiStage !== "sending")) {
+      return;
+    }
+
+    let disposed = false;
+    const pollSession = async () => {
       try {
-        const next = await getSession(sessionId);
-        setResult(next);
-        if (next.stage === "follow_up_required") {
-          setUiStage("follow_up_required");
-          setStatusMessage("Required recap fields are missing. Answer the follow-up prompts and retry.");
-        } else if (next.stage === "partial") {
-          setUiStage("partial");
-          setStatusMessage("The structured extraction failed twice. The draft is flagged as partial for review.");
-        } else if (next.stage === "completed") {
-          setUiStage("completed");
-          setStatusMessage(next.googleDoc?.status === "queued" ? "Draft queued for async Google Doc completion." : "Google Doc ready for editorial review.");
-          if (intervalRef.current) {
-            window.clearInterval(intervalRef.current);
-          }
-        } else if (next.stage === "error") {
-          setUiStage("error");
-          setStatusMessage(next.errorMessage ?? "The pipeline hit an error.");
-          if (intervalRef.current) {
-            window.clearInterval(intervalRef.current);
-          }
-        } else {
-          setUiStage("processing");
+        const nextResult = await getSession(sessionId);
+        if (disposed) {
+          return;
         }
-      } catch (error) {
-        setUiStage("error");
-        setStatusMessage(error instanceof Error ? error.message : "Failed to poll session status.");
-      }
-    }, 300);
+        setResult(nextResult);
 
-    return () => {
-      if (intervalRef.current) {
-        window.clearInterval(intervalRef.current);
+        if (nextResult.stage === "review_ready") {
+          transitionTo("review");
+          setStatusMessage("Your recap is ready to shape.");
+          updateSessionHistory("ready", nextResult);
+        } else if (nextResult.stage === "follow_up_required") {
+          transitionTo("follow_up");
+          setStatusMessage("A few details need your attention before we can send this recap.");
+          updateSessionHistory("retry", nextResult);
+        } else if (nextResult.stage === "completed") {
+          transitionTo("delivered");
+          setStatusMessage("Your recap has been delivered to Michael's editorial desk.");
+          updateSessionHistory("sent", nextResult);
+        } else if (nextResult.stage === "partial" || nextResult.stage === "error") {
+          transitionTo("error");
+          setStatusMessage(nextResult.errorMessage ?? "We could not finish this recap.");
+          updateSessionHistory("retry", nextResult);
+        }
+      } catch (pollingError) {
+        if (!disposed) {
+          transitionTo("error");
+          setStatusMessage(pollingError instanceof Error ? pollingError.message : "We could not check this recap.");
+        }
       }
     };
-  }, [sessionId]);
 
-  async function ensureSessionId() {
-    if (sessionId) {
-      return sessionId;
-    }
-    const created = await createSession();
-    setSessionId(created.sessionId);
-    return created.sessionId;
-  }
+    void pollSession();
+    const pollingInterval = window.setInterval(() => {
+      void pollSession();
+    }, 1000);
 
-  async function submit(transcript: string, nextScenario: Scenario = scenario) {
-    const nextSessionId = await ensureSessionId();
-    const fileMetadata = selectedFile
-      ? {
-          fileName: selectedFile.name,
-          mimeType: selectedFile.type,
-          sizeBytes: selectedFile.size
-        }
-      : {
-          fileName: "recap.webm",
-          mimeType: "audio/webm",
-          sizeBytes: 2048
-        };
+    return () => {
+      disposed = true;
+      window.clearInterval(pollingInterval);
+    };
+  }, [sessionId, uiStage]);
 
-    if (!allowedMimeTypes.has(fileMetadata.mimeType)) {
-      setUiStage("error");
-      setStatusMessage("Unsupported upload type. Use webm, mp4, mp3, or wav audio.");
+  async function processAudio(audio: Blob, transcriptText: string, existingSessionId?: string) {
+    const mimeType = normalizeAudioMimeType(audio, audio instanceof File ? audio.name : undefined);
+    if (!mimeType) {
+      transitionTo("error");
+      setStatusMessage("Use a webm, m4a, mp3, or wav audio file.");
       return;
     }
 
-    setUiStage(transitionUiStage(uiStage === "follow_up_required" || uiStage === "partial" || uiStage === "error" ? uiStage : "idle", "uploading"));
-    setStatusMessage("Signing upload and submitting the recap.");
-
-    const upload = await signUpload({
-      sessionId: nextSessionId,
-      fileName: fileMetadata.fileName,
-      mimeType: fileMetadata.mimeType as "audio/webm" | "audio/mp4" | "audio/mpeg" | "audio/wav",
-      sizeBytes: fileMetadata.sizeBytes,
-      idempotencyKey: `upload-${nextSessionId}-${Date.now()}`
-    });
-
-    setUiStage(transitionUiStage("uploading", "processing"));
-    setStatusMessage("Transcribing and drafting the Google Doc.");
-
-    await startPipeline({
-      sessionId: nextSessionId,
-      uploadToken: upload.uploadToken,
-      idempotencyKey: `pipeline-${nextSessionId}-${Date.now()}`,
-      transcriptText: transcript,
-      simulate: {
-        extractionMode: nextScenario === "missing_fields" ? "missing_fields" : nextScenario === "invalid_twice" ? "invalid_twice" : "normal",
-        publishMode: nextScenario === "queued" ? "queued" : "normal"
-      }
-    });
-  }
-
-  async function handlePrimaryButtonClick() {
-    if (uiStage === "idle") {
-      setUiStage(transitionUiStage("idle", "recording"));
-      setStatusMessage("Recording the guided recap. Tap again when you are done.");
+    const uploadAudioBlob = audio.type.split(";", 1)[0]?.toLowerCase() === mimeType ? audio : new Blob([audio], { type: mimeType });
+    if (uploadAudioBlob.size === 0) {
+      transitionTo("error");
+      setStatusMessage("The audio file is empty. Record again or choose another file.");
       return;
     }
 
-    if (uiStage === "recording") {
-      startTransition(() => {
-        void submit(transcriptText).catch((error) => {
-          setUiStage("error");
-          setStatusMessage(error instanceof Error ? error.message : "Failed to submit recap.");
-        });
+    try {
+      transitionTo("uploading");
+      setStatusMessage("Saving your tape securely.");
+
+      const targetSessionId = existingSessionId ?? (await createSession()).sessionId;
+      setSessionId(targetSessionId);
+      upsertHistory(historyEntry(targetSessionId, eventDetails, "shaping"));
+
+      const upload = await signUpload({
+        sessionId: targetSessionId,
+        fileName: audio instanceof File ? audio.name : `recap-${Date.now()}.${extensionForMimeType(mimeType)}`,
+        mimeType: mimeType as "audio/webm" | "audio/mp4" | "audio/mpeg" | "audio/wav",
+        sizeBytes: uploadAudioBlob.size,
+        idempotencyKey: `upload-${targetSessionId}-${Date.now()}`
       });
+      await uploadAudio(upload.uploadUrl, uploadAudioBlob);
+
+      transitionTo("processing");
+      setStatusMessage("Listening for the important parts of the day.");
+      await startPipeline({
+        sessionId: targetSessionId,
+        uploadToken: upload.uploadToken,
+        idempotencyKey: `process-${targetSessionId}-${Date.now()}`,
+        transcriptText
+      });
+    } catch (processingError) {
+      transitionTo("error");
+      setStatusMessage(processingError instanceof Error ? processingError.message : "The recap could not be uploaded.");
+      updateSessionHistory("retry");
     }
   }
 
-  async function handleRetry() {
-    const patchedTranscript = `${transcriptText} ${Object.entries(followUpAnswers)
-      .map(([field, answer]) => `${followUpLabelMap[field] ?? field}: ${answer}.`)
-      .join(" ")}`;
-    setTranscriptText(patchedTranscript);
-    await submit(patchedTranscript, scenario === "missing_fields" ? "normal" : scenario);
+  async function startRecording() {
+    const started = await recorder.start();
+    if (started) {
+      transitionTo("recording");
+      setStatusMessage("Recording. Tell the day in the order you remember it.");
+      return;
+    }
+
+    transitionTo("error");
+    setStatusMessage(recorder.error ?? "Microphone access could not be started. Import an audio file instead.");
   }
 
-  function handleConnectGoogle() {
-    window.location.assign(getGoogleAuthStartUrl());
+  async function stopRecording() {
+    const audio = await recorder.stop();
+    if (!audio) {
+      transitionTo("error");
+      setStatusMessage("No audio was captured. Record again or import an audio file.");
+      return;
+    }
+
+    setCapturedAudio(audio);
+    await processAudio(audio, buildTranscriptSeed(eventDetails));
+  }
+
+  function handleAudioImport(event: ChangeEvent<HTMLInputElement>) {
+    const audio = event.target.files?.[0];
+    event.target.value = "";
+    if (!audio) {
+      return;
+    }
+    setCapturedAudio(audio);
+    void processAudio(audio, buildTranscriptSeed(eventDetails));
+  }
+
+  async function sendRecap() {
+    if (!sessionId) {
+      transitionTo("error");
+      setStatusMessage("This recap no longer has an active session. Start a new recording.");
+      return;
+    }
+
+    try {
+      transitionTo("sending");
+      setStatusMessage("Building the editorial handoff.");
+      await publishSession(sessionId);
+      const delivered = await getSession(sessionId);
+      setResult(delivered);
+      transitionTo("delivered");
+      setStatusMessage("Your recap has been delivered to Michael's editorial desk.");
+      updateSessionHistory("sent", delivered);
+    } catch (deliveryError) {
+      transitionTo("error");
+      setStatusMessage(deliveryError instanceof Error ? deliveryError.message : "This recap could not be sent.");
+      updateSessionHistory("retry");
+    }
+  }
+
+  async function submitFollowUps() {
+    const prompts = result?.followUps ?? [];
+    const unanswered = prompts.find((prompt) => !followUpAnswers[prompt.field]?.trim());
+    if (unanswered) {
+      setFollowUpError("Add a quick answer for each required detail.");
+      return;
+    }
+    if (!capturedAudio) {
+      transitionTo("error");
+      setStatusMessage("The original audio is no longer available in this browser. Start a new recap.");
+      return;
+    }
+
+    setFollowUpError(null);
+    const answers = prompts
+      .map((prompt) => `${followUpTranscriptLabels[prompt.field] ?? prompt.field}: ${followUpAnswers[prompt.field]}.`)
+      .join(" ");
+    await processAudio(capturedAudio, `${buildTranscriptSeed(eventDetails)} ${answers}`, sessionId ?? undefined);
+  }
+
+  function startNewRecap() {
+    setView("capture");
+    setSessionId(null);
+    setResult(null);
+    setCapturedAudio(null);
+    setFollowUpAnswers({});
+    setFollowUpError(null);
+    setCueIndex(0);
+    setMarkedMoments(0);
+    setStatusMessage("Ready to capture your field note.");
+    if (uiStage !== "ready") {
+      transitionTo("ready");
+    }
+  }
+
+  function markMoment() {
+    setMarkedMoments((currentCount) => currentCount + 1);
+    setStatusMessage(`Moment ${markedMoments + 1} marked at ${formatDuration(recorder.elapsedMs)}.`);
+  }
+
+  const audioLevelLabel = recorder.level > 0.55 ? "Strong" : recorder.level > 0.2 ? "Good" : "Listening";
+  const activeCue = storyCues[cueIndex % storyCues.length];
+  const recap = result?.recap;
+  const historyForDisplay = history.slice(0, 12);
+
+  function renderCaptureContent() {
+    if (uiStage === "recording") {
+      return (
+        <section className="recording-workspace" aria-labelledby="recording-heading">
+          <header className="workspace-topbar">
+            <div className="session-location"><span className="recording-dot" />{eventDetails.coupleNames || "New recap"} / {eventDetails.venueName || "Field note"}</div>
+            <button className="icon-button" type="button" onClick={recorder.status === "paused" ? recorder.resume : recorder.pause} aria-label={recorder.status === "paused" ? "Resume recording" : "Pause recording"}>
+              {recorder.status === "paused" ? <Play size={18} /> : <Pause size={18} />}
+            </button>
+          </header>
+          <div className="recording-layout">
+            <div className="recorder-stage">
+              <div className="recorder-status"><p id="recording-heading"><span className="recording-dot" />{recorder.status === "paused" ? "Paused" : "Recording"}</p><time>{formatDuration(recorder.elapsedMs)}</time></div>
+              <div className="recording-wave"><Waveform level={recorder.level} /></div>
+              <p className="audio-level"><Volume2 size={16} />Input level: {audioLevelLabel}</p>
+              <div className="recorder-controls">
+                <button className="text-icon-button" type="button" onClick={markMoment}><BookmarkPlus size={17} />Mark moment{markedMoments ? ` (${markedMoments})` : ""}</button>
+                <button className="stop-recording-button" type="button" onClick={() => void stopRecording()} aria-label="Stop recording"><span /></button>
+                <button className="text-icon-button" type="button" onClick={recorder.status === "paused" ? recorder.resume : recorder.pause}>{recorder.status === "paused" ? <Play size={17} /> : <Pause size={17} />}{recorder.status === "paused" ? "Resume" : "Pause"}</button>
+              </div>
+            </div>
+            <aside className="story-cue-panel" aria-label="Story cue">
+              <p className="eyebrow">Story cue / {String((cueIndex % storyCues.length) + 1).padStart(2, "0")}</p>
+              <h2>{activeCue}</h2>
+              <p>You can answer now, skip it, or return to it after the tape stops.</p>
+              <div className="cue-actions"><button type="button" onClick={() => setCueIndex((index) => index + 1)}>Skip cue</button><button type="button" onClick={markMoment}>Mark moment</button></div>
+              <ol className="cue-list">
+                {storyCues.map((cue, index) => <li className={index < cueIndex ? "is-done" : index === cueIndex ? "is-current" : ""} key={cue}><span>{String(index + 1).padStart(2, "0")} / {index === 0 ? "Arrival" : index === 1 ? "Portraits" : index === 2 ? "Ceremony" : "Reception"}</span><span>{index < cueIndex ? "Noted" : index === cueIndex ? "Open" : "Next"}</span></li>)}
+              </ol>
+            </aside>
+          </div>
+        </section>
+      );
+    }
+
+    if (uiStage === "uploading" || uiStage === "processing" || uiStage === "sending") {
+      const sending = uiStage === "sending";
+      return (
+        <section className="processing-workspace" aria-labelledby="processing-heading">
+          <div className="processing-content">
+            <LoaderCircle className="processing-icon" size={38} aria-hidden="true" />
+            <p className="eyebrow">{sending ? "Preparing delivery" : uiStage === "uploading" ? "Saving your tape" : "Shaping your recap"}</p>
+            <h1 id="processing-heading">{sending ? "Building the editorial handoff." : "Listening for the story."}</h1>
+            <p>{statusMessage}</p>
+            <ol className="delivery-progress" aria-label="Recap progress">
+              <li className={uiStage === "uploading" ? "is-active" : "is-done"}><span>Audio saved</span><small>{uiStage === "uploading" ? "Working" : "Done"}</small></li>
+              <li className={uiStage === "processing" ? "is-active" : sending ? "is-done" : ""}><span>Story shaped</span><small>{uiStage === "processing" ? "Working" : sending ? "Done" : "Waiting"}</small></li>
+              <li className={sending ? "is-active" : ""}><span>Handoff sent</span><small>{sending ? "Working" : "Waiting"}</small></li>
+            </ol>
+          </div>
+        </section>
+      );
+    }
+
+    if (uiStage === "review") {
+      return (
+        <section className="light-workspace review-workspace" aria-labelledby="review-heading">
+          <header className="workspace-topbar light-topbar"><div className="session-location">{recap?.couple_names || eventDetails.coupleNames} / Review</div><button className="icon-button light-icon-button" type="button" aria-label="Transcript preview"><FileText size={18} /></button></header>
+          <div className="review-content">
+            <div className="review-heading"><div><p className="eyebrow">Coverage map</p><h1 id="review-heading">The story is taking shape.</h1><p>We found the important parts of the day. Review the coverage, then send it to Michael.</p></div><strong>{recap ? "5 / 5 FOUND" : "IN REVIEW"}</strong></div>
+            <CoverageMap recap={recap} />
+            <div className="review-note"><div><h2>Ready when you are.</h2><p>You can send this recap now, or read the transcript before delivery.</p></div><button className="secondary-button" type="button"><FileText size={16} />Read transcript</button></div>
+            <div className="review-actions"><button className="secondary-button" type="button" onClick={startNewRecap}>Discard and start again</button><button className="primary-button" type="button" onClick={() => void sendRecap()}><Send size={16} />Send recap</button></div>
+          </div>
+        </section>
+      );
+    }
+
+    if (uiStage === "follow_up") {
+      return (
+        <section className="light-workspace review-workspace" aria-labelledby="follow-up-heading">
+          <header className="workspace-topbar light-topbar"><div className="session-location">{eventDetails.coupleNames || "New recap"} / Add details</div><button className="icon-button light-icon-button" type="button" onClick={startNewRecap} aria-label="Start a new recap"><X size={18} /></button></header>
+          <div className="review-content">
+            <div className="review-heading"><div><p className="eyebrow">A few details need a note</p><h1 id="follow-up-heading">Keep the story moving.</h1><p>These details make the handoff usable for the editorial team. Your original tape stays attached.</p></div><strong>{result?.followUps.length ?? 0} OPEN</strong></div>
+            <div className="follow-up-fields">
+              {result?.followUps.map((prompt) => <label key={prompt.field}><span>{prompt.prompt}</span><input value={followUpAnswers[prompt.field] ?? ""} onChange={(event) => setFollowUpAnswers((current) => ({ ...current, [prompt.field]: event.target.value }))} /></label>)}
+            </div>
+            {followUpError ? <p className="form-error" role="alert"><CircleAlert size={16} />{followUpError}</p> : null}
+            <div className="review-actions"><button className="secondary-button" type="button" onClick={startNewRecap}>Start a new recap</button><button className="primary-button" type="button" onClick={() => void submitFollowUps()}><Upload size={16} />Update recap</button></div>
+          </div>
+        </section>
+      );
+    }
+
+    if (uiStage === "delivered") {
+      return (
+        <section className="light-workspace delivery-workspace" aria-labelledby="delivery-heading">
+          <header className="workspace-topbar light-topbar"><div className="session-location">{recap?.couple_names || eventDetails.coupleNames} / Delivery</div><button className="icon-button light-icon-button" type="button" onClick={() => setView("library")} aria-label="Open recap library"><Library size={18} /></button></header>
+          <div className="delivery-content">
+            <span className="delivery-check"><Check size={30} /></span>
+            <p className="eyebrow">Dispatch complete</p>
+            <h1 id="delivery-heading">Your recap is on its way.</h1>
+            <p>The original tape, structured notes, and a working blog draft are bundled for editorial review.</p>
+            <ol className="delivery-progress is-complete"><li className="is-done"><span>Tape saved</span><small>Complete</small></li><li className="is-done"><span>Story shaped</span><small>Complete</small></li><li className="is-done"><span>Draft built</span><small>Complete</small></li><li className="is-done"><span>Handoff sent</span><small>Live</small></li></ol>
+            <p className="destination"><Send size={17} />Delivered to <strong>michael@authormadephoto.com</strong></p>
+            <div className="delivery-actions"><button className="secondary-button" type="button" onClick={startNewRecap}><Mic size={16} />New recap</button>{result?.googleDoc ? <a className="primary-button" href={result.googleDoc.url} target="_blank" rel="noreferrer"><FileText size={16} />Open working draft</a> : null}</div>
+          </div>
+        </section>
+      );
+    }
+
+    if (uiStage === "error") {
+      return (
+        <section className="error-workspace" aria-labelledby="error-heading">
+          <div className="error-content"><CircleAlert size={38} /><p className="eyebrow">Capture needs attention</p><h1 id="error-heading">This recap did not finish.</h1><p>{statusMessage}</p><div className="error-actions">{capturedAudio ? <button className="primary-button" type="button" onClick={() => void processAudio(capturedAudio, buildTranscriptSeed(eventDetails), sessionId ?? undefined)}><Upload size={16} />Try again</button> : null}<button className="secondary-button inverse-secondary" type="button" onClick={startNewRecap}>Start a new recap</button></div></div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="ready-workspace" aria-labelledby="ready-heading">
+        <header className="workspace-topbar">
+          <div className="session-location"><span className="recording-dot" />New field note</div>
+          <button className="icon-button" type="button" onClick={() => setDetailsOpen((current) => !current)} aria-label="Edit wedding details"><Settings2 size={18} /></button>
+        </header>
+        <div className="ready-layout">
+          <section className="ready-intro">
+            <p className="eyebrow">{eventDetails.dateLabel}</p>
+            <h1 id="ready-heading">{eventDetails.coupleNames || "New wedding recap"}</h1>
+            <p className="event-meta"><strong>{eventDetails.venueName || "Add a venue"}</strong><br />{eventDetails.cityState || "Add city and state"}</p>
+            <div className="intro-rule" />
+            <p>Tell the day in your own order. When you stop, we will shape the raw recap into an editorial handoff.</p>
+            {detailsOpen ? <div className="event-editor"><label>Couple names<input value={eventDetails.coupleNames} onChange={(event) => setEventDetails((current) => ({ ...current, coupleNames: event.target.value }))} /></label><label>Venue<input value={eventDetails.venueName} onChange={(event) => setEventDetails((current) => ({ ...current, venueName: event.target.value }))} /></label><label>City and state<input value={eventDetails.cityState} onChange={(event) => setEventDetails((current) => ({ ...current, cityState: event.target.value }))} /></label><button className="text-icon-button" type="button" onClick={() => setDetailsOpen(false)}><Check size={16} />Done</button></div> : null}
+          </section>
+          <section className="record-launch-panel">
+            <button className="record-launch" type="button" onClick={() => void startRecording()} disabled={recorder.status === "requesting"}><span><Mic size={32} /><small>New tape</small><strong>{recorder.status === "requesting" ? "Opening mic" : "Record recap"}</strong></span></button>
+            <p>One tap to start. 4-7 minutes is usually enough.</p>
+            <button className="import-button" type="button" onClick={() => fileInputRef.current?.click()}><FileAudio size={16} />Import audio</button>
+            {!recorder.isSupported ? <p className="browser-note"><CircleAlert size={14} />Microphone capture is unavailable in this browser.</p> : null}
+          </section>
+        </div>
+        <footer className="ready-footer"><Send size={17} />Finished recaps are delivered to <strong>Michael's editorial desk.</strong></footer>
+      </section>
+    );
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-[#2a1c21]">
-      <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-        <section className="rounded-[2rem] border border-[#d9c1b1] bg-white/80 p-8 shadow-[0_24px_80px_rgba(98,59,34,0.14)] backdrop-blur">
-          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[#9a6d53]">Contractor Capture</p>
-          <h1 className="mt-4 max-w-3xl text-4xl leading-tight font-semibold text-[#28181b] sm:text-5xl">
-            One-button recap capture for a near publish-ready wedding blog draft.
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg leading-8 text-[#5b4043]">
-            Record once, keep the schema strict, and hand the editor a Google Doc draft with local SEO structure already in place.
-          </p>
-
-          <div className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="rounded-[1.5rem] bg-[#2d1f27] p-6 text-white">
-              <div className="rounded-[1.5rem] border border-white/15 bg-white/5 p-5">
-                <p className="text-sm uppercase tracking-[0.3em] text-[#f5d1ae]">Current stage</p>
-                <p className="mt-3 text-3xl font-semibold capitalize">{uiStage.replaceAll("_", " ")}</p>
-                <p className="mt-4 text-sm leading-6 text-[#f6e4d4]">{statusMessage}</p>
-              </div>
-
-              <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-white/5 p-4 text-sm text-[#f6e4d4]">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#f5d1ae]">Google auth</p>
-                <p className="mt-2 font-medium text-white">
-                  {googleAuthStatus?.configured === false
-                    ? "OAuth is not configured yet."
-                    : googleAuthStatus?.connected
-                      ? `Connected as ${googleAuthStatus.email}`
-                      : "Google is not connected."}
-                </p>
-                <button
-                  className="mt-3 rounded-full border border-[#f0b489] px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-[#f5d1ae] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:border-white/20 disabled:text-white/40"
-                  onClick={handleConnectGoogle}
-                  disabled={googleAuthStatus?.configured === false}
-                >
-                  {googleAuthStatus?.connected ? "Reconnect Google" : "Connect Google"}
-                </button>
-              </div>
-
-              <button
-                className="mt-6 flex h-48 w-full items-center justify-center rounded-full border border-[#f0b489] bg-[radial-gradient(circle_at_30%_30%,#f9ccb2,#d9734e_58%,#6d2a1f)] text-center text-2xl font-semibold tracking-wide text-white shadow-[0_24px_40px_rgba(0,0,0,0.24)] transition hover:scale-[1.01]"
-                onClick={() => {
-                  void handlePrimaryButtonClick();
-                }}
-              >
-                {uiStage === "recording" ? "Stop And Process" : "Start Capture"}
-              </button>
-
-              <label className="mt-6 block text-sm text-[#f6e4d4]">
-                Scenario
-                <select
-                  data-testid="scenario-select"
-                  className="mt-2 w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-white outline-none"
-                  value={scenario}
-                  onChange={(event) => setScenario(event.target.value as Scenario)}
-                >
-                  <option value="normal" className="text-black">Normal</option>
-                  <option value="missing_fields" className="text-black">Missing fields</option>
-                  <option value="invalid_twice" className="text-black">Schema invalid twice</option>
-                  <option value="queued" className="text-black">Queued Google Doc</option>
-                </select>
-              </label>
-
-              <label className="mt-6 block text-sm text-[#f6e4d4]">
-                Optional fallback upload
-                <input
-                  data-testid="audio-input"
-                  type="file"
-                  accept="audio/*,.txt"
-                  className="mt-2 block w-full rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white"
-                  onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-                />
-              </label>
-            </div>
-
-            <div className="space-y-4">
-              <label className="block text-sm font-semibold uppercase tracking-[0.3em] text-[#8f6656]">
-                Transcript seed
-                <textarea
-                  data-testid="transcript-input"
-                  className="mt-3 min-h-72 w-full rounded-[1.5rem] border border-[#dfc9bc] bg-[#fffaf5] px-5 py-4 text-base leading-7 outline-none"
-                  value={transcriptText}
-                  onChange={(event) => setTranscriptText(event.target.value)}
-                />
-              </label>
-              <p className="rounded-3xl border border-[#ead5ca] bg-[#fffaf4] px-5 py-4 text-sm leading-6 text-[#6a4c4f]">
-                Deferred preview: {deferredTranscript.slice(0, 220)}{deferredTranscript.length > 220 ? "..." : ""}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <aside className="space-y-6">
-          <section className="rounded-[2rem] border border-[#dbcabc] bg-white/75 p-6 shadow-[0_24px_80px_rgba(98,59,34,0.10)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#9a6d53]">Editor Gate</p>
-            <h2 className="mt-3 text-2xl font-semibold text-[#28181b]">Approval checklist</h2>
-            <div className="mt-5 space-y-3 text-sm text-[#5d4648]">
-              {Object.entries(checklist).map(([key, value]) => (
-                <label key={key} className="flex items-center gap-3 rounded-2xl border border-[#ecd8cd] bg-[#fff9f3] px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={value}
-                    onChange={(event) => {
-                      setChecklist((current) => ({ ...current, [key]: event.target.checked }));
-                    }}
-                  />
-                  <span className="capitalize">{key.replace(/([A-Z])/g, " $1")}</span>
-                </label>
-              ))}
-            </div>
-            <p className="mt-4 text-sm font-medium text-[#7b5547]">
-              {publishReady ? "Publish handoff unblocked." : "Publish handoff blocked until every requirement is checked."}
-            </p>
-          </section>
-
-          <section className="rounded-[2rem] border border-[#dbcabc] bg-white/75 p-6 shadow-[0_24px_80px_rgba(98,59,34,0.10)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#9a6d53]">Pipeline Result</p>
-            {result?.followUps.length ? (
-              <div className="mt-4 space-y-4">
-                <h3 className="text-xl font-semibold text-[#28181b]">Follow-up prompts</h3>
-                {result.followUps.map((prompt) => (
-                  <label key={prompt.field} className="block text-sm font-medium text-[#5d4648]">
-                    {prompt.prompt}
-                    <input
-                      data-testid={`follow-up-${prompt.field}`}
-                      className="mt-2 w-full rounded-2xl border border-[#e5cfc1] bg-[#fff9f3] px-4 py-3 outline-none"
-                      value={followUpAnswers[prompt.field] ?? ""}
-                      onChange={(event) =>
-                        setFollowUpAnswers((current) => ({
-                          ...current,
-                          [prompt.field]: event.target.value
-                        }))
-                      }
-                    />
-                  </label>
-                ))}
-                <button
-                  className="rounded-full bg-[#8b4d38] px-5 py-3 text-sm font-semibold text-white"
-                  onClick={() => {
-                    void handleRetry();
-                  }}
-                >
-                  Retry With Follow-ups
-                </button>
-              </div>
-            ) : null}
-
-            {result?.blogOutput ? (
-              <div className="mt-4 space-y-4">
-                <h3 className="text-xl font-semibold text-[#28181b]">Draft output</h3>
-                <p className="text-lg font-semibold text-[#3d2226]">{result.blogOutput.primary_title}</p>
-                <p className="text-sm leading-6 text-[#5d4648]">{result.blogOutput.meta_description}</p>
-                <ul className="space-y-2 text-sm leading-6 text-[#5d4648]">
-                  {result.blogOutput.section_blocks.map((section) => (
-                    <li key={section.heading} className="rounded-2xl border border-[#ebd8cb] bg-[#fff9f3] px-4 py-3">
-                      <strong>{section.heading}:</strong> {section.body}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {result?.googleDoc ? (
-              <div className="mt-4 rounded-3xl border border-[#e6d6c6] bg-[#fff8ef] px-5 py-4 text-sm text-[#5d4648]">
-                <p className="font-semibold">Google Doc {result.googleDoc.status === "queued" ? "Queued" : "Ready"}</p>
-                <a className="mt-2 inline-block text-[#8b4d38] underline" href={result.googleDoc.url} target="_blank" rel="noreferrer">
-                  Open generated draft
-                </a>
-              </div>
-            ) : null}
-          </section>
-        </aside>
-      </div>
+    <main className={`tape-app ${view === "library" ? "is-library" : ""}`}>
+      <a className="skip-link" href="#app-content">Skip to content</a>
+      <AppNavigation view={view} onCapture={() => setView("capture")} onLibrary={() => setView("library")} onHelp={() => setHelpOpen(true)} />
+      <input ref={fileInputRef} data-testid="audio-input" className="visually-hidden" type="file" accept="audio/webm,audio/mp4,audio/mpeg,audio/wav,.webm,.m4a,.mp4,.mp3,.wav" onChange={handleAudioImport} />
+      <section id="app-content" className="app-main">
+        {view === "library" ? <section className="library-workspace" aria-labelledby="library-heading"><header className="workspace-topbar"><div className="session-location">Library / {history.length} recaps</div><button className="icon-button" type="button" onClick={startNewRecap} aria-label="Start a new recap"><Mic size={18} /></button></header><div className="library-content"><div className="library-heading"><div><p className="eyebrow">Field notes</p><h1 id="library-heading">Your recent tapes</h1><p>Every recap stays available with its delivery outcome on this device.</p></div><button className="primary-button signal-button" type="button" onClick={startNewRecap}><Mic size={16} />New recap</button></div>{historyForDisplay.length ? <div className="library-list">{historyForDisplay.map((entry, index) => <article className="library-row" key={entry.sessionId}><span className="library-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{entry.title}</strong><p>{entry.subtitle}</p></div><time>{new Date(entry.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><span className={`library-status is-${entry.status}`}>{entry.status === "sent" ? "Sent" : entry.status === "ready" ? "Ready" : entry.status === "retry" ? "Needs retry" : "Shaping"}</span>{entry.googleDocUrl ? <a className="library-doc-link" href={entry.googleDocUrl} target="_blank" rel="noreferrer" aria-label={`Open draft for ${entry.title}`}><FileText size={16} /></a> : null}</article>)}</div> : <div className="library-empty"><FileAudio size={34} /><h2>No tapes yet.</h2><p>Your completed recaps will appear here with their delivery status.</p><button className="primary-button signal-button" type="button" onClick={startNewRecap}><Mic size={16} />Record your first recap</button></div>}</div></section> : renderCaptureContent()}
+      </section>
+      <p className="sr-only" role="status" aria-live="polite">{statusMessage}</p>
+      {helpOpen ? <div className="help-backdrop" role="presentation"><section className="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-heading"><button className="icon-button light-icon-button" type="button" onClick={() => setHelpOpen(false)} aria-label="Close help"><X size={18} /></button><p className="eyebrow">Field note guide</p><h2 id="help-heading">A clean tape makes a strong handoff.</h2><ol><li>Start with the couple, venue, and city.</li><li>Tell the day in whatever order feels natural.</li><li>Use a story cue only when it helps.</li><li>Review the coverage map before sending.</li></ol><button className="primary-button" type="button" onClick={() => setHelpOpen(false)}>Back to recap</button></section></div> : null}
     </main>
   );
 }

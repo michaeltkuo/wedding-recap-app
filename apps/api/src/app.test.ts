@@ -24,13 +24,21 @@ async function createSessionAndUpload(app: ReturnType<typeof createApp>) {
       idempotencyKey: `upload-${sessionId}`
     });
 
+  const uploadPath = new URL(uploadResponse.body.uploadUrl).pathname;
+  const audioResponse = await request(app)
+    .put(uploadPath)
+    .set(contractorHeaders)
+    .set("content-type", "audio/webm")
+    .send(Buffer.alloc(1024, 1));
+
+  expect(audioResponse.status).toBe(201);
   return { sessionId, uploadToken: uploadResponse.body.uploadToken };
 }
 
-async function waitForCompletion(app: ReturnType<typeof createApp>, sessionId: string) {
+async function waitForReview(app: ReturnType<typeof createApp>, sessionId: string) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const status = await request(app).get(`/api/sessions/${sessionId}`).set(contractorHeaders);
-    if (["completed", "follow_up_required", "partial", "error"].includes(status.body.stage)) {
+    if (["review_ready", "follow_up_required", "partial", "error"].includes(status.body.stage)) {
       return status.body;
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -67,7 +75,36 @@ describe("api", () => {
     expect(response.status).toBe(400);
   });
 
-  it("completes the happy path and returns a Google Doc", async () => {
+  it("rejects a pipeline start before signed audio has been uploaded", async () => {
+    const app = createApp();
+    const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
+    const sessionId = sessionResponse.body.sessionId;
+    const uploadResponse = await request(app)
+      .post("/api/uploads/sign-url")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        fileName: "recap.webm",
+        mimeType: "audio/webm",
+        sizeBytes: 1024,
+        idempotencyKey: `upload-unreceived-${sessionId}`
+      });
+
+    const response = await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken: uploadResponse.body.uploadToken,
+        idempotencyKey: `pipeline-unreceived-${sessionId}`,
+        transcriptText: "couple: Alex and Sam. venue: Cypress Grove. city: Orlando, Florida."
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/Audio upload has not been received/);
+  });
+
+  it("pauses the happy path for review before explicit delivery", async () => {
     const app = createApp();
     const { sessionId, uploadToken } = await createSessionAndUpload(app);
 
@@ -87,9 +124,27 @@ describe("api", () => {
 
     expect(startResponse.status).toBe(202);
 
-    const result = await waitForCompletion(app, sessionId);
-    expect(result.stage).toBe("completed");
-    expect(result.googleDoc.url).toContain("docs.google.com");
+    const review = await waitForReview(app, sessionId);
+    expect(review.stage).toBe("review_ready");
+    expect(review.googleDoc).toBeUndefined();
+
+    const delivery = await request(app)
+      .post("/api/docs/publish")
+      .set(contractorHeaders)
+      .send({ sessionId, publishMode: "normal" });
+
+    expect(delivery.status).toBe(200);
+    expect(delivery.body.googleDoc.url).toContain("docs.google.com");
+
+    const result = await request(app).get(`/api/sessions/${sessionId}`).set(contractorHeaders);
+    expect(result.body.stage).toBe("completed");
+
+    const duplicateDelivery = await request(app)
+      .post("/api/docs/publish")
+      .set(contractorHeaders)
+      .send({ sessionId, publishMode: "normal" });
+    expect(duplicateDelivery.status).toBe(400);
+    expect(duplicateDelivery.body.error).toMatch(/not ready to send/);
   });
 
   it("returns follow-up prompts when required extraction fields are missing", async () => {
@@ -109,7 +164,7 @@ describe("api", () => {
         }
       });
 
-    const result = await waitForCompletion(app, sessionId);
+    const result = await waitForReview(app, sessionId);
     expect(result.stage).toBe("follow_up_required");
     expect(result.followUps.length).toBeGreaterThan(0);
   });
@@ -132,7 +187,7 @@ describe("api", () => {
         }
       });
 
-    const result = await waitForCompletion(app, sessionId);
+    const result = await waitForReview(app, sessionId);
     expect(result.stage).toBe("partial");
     expect(result.partial).toBe(true);
   });
@@ -157,8 +212,8 @@ describe("api", () => {
     expect(first.status).toBe(202);
     expect(second.status).toBe(202);
 
-    const result = await waitForCompletion(app, sessionId);
-    expect(result.stage).toBe("completed");
+    const result = await waitForReview(app, sessionId);
+    expect(result.stage).toBe("review_ready");
   });
 
   it("publishes observability alerts when budgets are exceeded", async () => {

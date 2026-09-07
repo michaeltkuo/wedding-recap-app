@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recap Studio Design System</title>
+    <link rel="stylesheet" href="./design-system.css" />
+    <style>
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      .swatch {
+        width: 84px;
+      }
+
+      .swatch i {
+        display: block;
+        height: 52px;
+        border-radius: 10px;
+        border: 1px solid var(--n-200);
+      }
+
+      .swatch span {
+        display: block;
+        margin-top: 6px;
+        font: var(--text-caption);
+        color: var(--n-500);
+      }
+
+      section {
+        margin-top: 56px;
+      }
+
+      section:first-of-type {
+        margin-top: 32px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 14px;
+      }
+
+      .pad {
+        padding: 20px;
+      }
+
+      nav.top {
+        border-bottom: 1px solid var(--n-200);
+        background: var(--n-0);
+        padding: 14px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      @media (max-width: 700px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="top">
+      <strong class="ds-h3">Recap Studio · Design System</strong>
+      <a href="./mockup-option-b.html" class="ds-caption">View Option B application →</a>
+    </nav>
+
+    <div class="wrap">
+      <p class="ds-overline">Reference</p>
+      <h1 class="ds-display" style="margin-top:8px;">Design tokens and components</h1>
+      <p class="ds-body" style="margin-top:10px; max-width:60ch;">
+        Flat, neutral, single-accent system built for an operational contractor tool, distinct from the
+        blog's warm editorial voice. Full rationale in design-system.md.
+      </p>
+
+      <section>
+        <h2 class="ds-h2">Neutral scale</h2>
+        <div class="row">
+          <div class="swatch"><i style="background:var(--n-0)"></i><span>n-0</span></div>
+          <div class="swatch"><i style="background:var(--n-50)"></i><span>n-50</span></div>
+          <div class="swatch"><i style="background:var(--n-100)"></i><span>n-100</span></div>
+          <div class="swatch"><i style="background:var(--n-200)"></i><span>n-200</span></div>
+          <div class="swatch"><i style="background:var(--n-300)"></i><span>n-300</span></div>
+          <div class="swatch"><i style="background:var(--n-400)"></i><span>n-400</span></div>
+          <div class="swatch"><i style="background:var(--n-500)"></i><span>n-500</span></div>
+          <div class="swatch"><i style="background:var(--n-600)"></i><span>n-600</span></div>
+          <div class="swatch"><i style="background:var(--n-700)"></i><span>n-700</span></div>
+          <div class="swatch"><i style="background:var(--n-800)"></i><span>n-800</span></div>
+          <div class="swatch"><i style="background:var(--n-900)"></i><span>n-900</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Accent and semantic colors</h2>
+        <div class="row">
+          <div class="swatch"><i style="background:var(--a-500)"></i><span>accent-500</span></div>
+          <div class="swatch"><i style="background:var(--a-600)"></i><span>accent-600</span></div>
+          <div class="swatch"><i style="background:var(--success-500)"></i><span>success</span></div>
+          <div class="swatch"><i style="background:var(--warning-500)"></i><span>warning</span></div>
+          <div class="swatch"><i style="background:var(--danger-500)"></i><span>danger</span></div>
+          <div class="swatch"><i style="background:var(--info-500)"></i><span>info</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Typography</h2>
+        <div style="margin-top:14px; display:grid; gap:10px;">
+          <div class="ds-display">Screen title / display</div>
+          <div class="ds-h2">Section heading / h2</div>
+          <div class="ds-h3">Card title / h3</div>
+          <div class="ds-body">Body copy uses 15px/22px at regular weight for comfortable reading.</div>
+          <div class="ds-label">FORM LABEL / BUTTON TEXT</div>
+          <div class="ds-caption">Caption and meta text, e.g. timestamps</div>
+          <div class="ds-overline">Overline Kicker Label</div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Buttons</h2>
+        <div class="row">
+          <button class="btn btn-primary" type="button">Primary action</button>
+          <button class="btn btn-secondary" type="button">Secondary</button>
+          <button class="btn btn-ghost" type="button">Ghost</button>
+          <button class="btn btn-danger" type="button">Danger</button>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Badges</h2>
+        <div class="row">
+          <span class="badge badge-success">● Sent</span>
+          <span class="badge badge-warning">● Needs retry</span>
+          <span class="badge badge-danger">● Failed</span>
+          <span class="badge badge-info">● Processing</span>
+          <span class="badge badge-neutral">● Draft</span>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Record control</h2>
+        <div class="row" style="align-items:flex-start;">
+          <div>
+            <button class="record-control" type="button">
+              <span>
+                <span class="rc-label">Ready</span>
+                <span class="rc-time">Record</span>
+              </span>
+            </button>
+            <p class="ds-caption" style="text-align:center;margin-top:8px;">Idle state</p>
+          </div>
+          <div>
+            <button class="record-control is-recording" type="button">
+              <span>
+                <span class="rc-label">Recording</span>
+                <span class="rc-time">03:12</span>
+              </span>
+            </button>
+            <p class="ds-caption" style="text-align:center;margin-top:8px;">Active state</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Waveform</h2>
+        <div class="ds-card pad" style="max-width:360px;">
+          <div class="waveform">
+            <span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span>
+          </div>
+          <p class="ds-caption" style="text-align:center;margin-top:8px;">Input level: Good</p>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Stepper</h2>
+        <div class="ds-card pad">
+          <div class="stepper">
+            <div class="step is-done">
+              <div class="step-track"><i></i></div>
+              <div class="step-label">Upload</div>
+            </div>
+            <div class="step is-active">
+              <div class="step-track"><i></i></div>
+              <div class="step-label">Transcribe</div>
+            </div>
+            <div class="step is-pending">
+              <div class="step-track"><i></i></div>
+              <div class="step-label">Draft</div>
+            </div>
+            <div class="step is-pending">
+              <div class="step-track"><i></i></div>
+              <div class="step-label">Deliver</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Checklist</h2>
+        <div class="grid-2">
+          <div class="check-row">
+            <span class="check-icon ok">✓</span>
+            <span class="ds-body">Couple names captured</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon missing">!</span>
+            <span class="ds-body">Venue city/state missing</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="ds-h2">Cards and form fields</h2>
+        <div class="ds-card pad" style="max-width:420px;">
+          <div class="ds-field">
+            <label class="ds-label" for="demo-input">Couple names</label>
+            <input id="demo-input" class="ds-input" value="Alex and Conner" />
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

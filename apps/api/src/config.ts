@@ -2,6 +2,7 @@ const port = Number(process.env.PORT ?? 8787);
 
 export const API_CONFIG = {
   port,
+  origin: process.env.API_ORIGIN ?? `http://127.0.0.1:${port}`,
   contractorToken: process.env.CONTRACTOR_TOKEN ?? "demo-contractor-token",
   web: {
     origin: process.env.WEB_ORIGIN ?? "http://127.0.0.1:4173"

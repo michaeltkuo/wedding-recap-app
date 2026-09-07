@@ -1,0 +1,473 @@
+:root {
+  /* Neutral scale */
+  --n-0: #ffffff;
+  --n-50: #f6f7f8;
+  --n-100: #eceef1;
+  --n-200: #dde1e6;
+  --n-300: #c3c9d1;
+  --n-400: #98a1ac;
+  --n-500: #707986;
+  --n-600: #4d5561;
+  --n-700: #343b45;
+  --n-800: #20252b;
+  --n-900: #12161a;
+
+  /* Accent */
+  --a-50: #fbeee7;
+  --a-100: #f5d9c8;
+  --a-400: #d97a45;
+  --a-500: #c15a2e;
+  --a-600: #9c4522;
+
+  /* Semantic */
+  --success-500: #1e8e5a;
+  --success-100: #e2f5ea;
+  --warning-500: #b1780f;
+  --warning-100: #faedd4;
+  --danger-500: #c53a2a;
+  --danger-100: #fbe2de;
+  --info-500: #2f5fd6;
+  --info-100: #e5ecfd;
+
+  /* Typography */
+  --font-sans: "Inter", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --text-display: 700 30px/38px var(--font-sans);
+  --text-h2: 700 20px/28px var(--font-sans);
+  --text-h3: 600 16px/24px var(--font-sans);
+  --text-body: 400 15px/22px var(--font-sans);
+  --text-label: 600 13px/18px var(--font-sans);
+  --text-caption: 500 12px/16px var(--font-sans);
+  --text-overline: 700 11px/16px var(--font-sans);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  /* Elevation */
+  --elevation-0: none;
+  --elevation-1: 0 1px 2px rgba(18, 22, 26, 0.06);
+  --elevation-2: 0 8px 24px rgba(18, 22, 26, 0.12);
+
+  /* Motion */
+  --motion-fast: 120ms ease;
+  --motion-base: 200ms ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font: var(--text-body);
+  color: var(--n-700);
+  background: var(--n-50);
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+.ds-overline {
+  font: var(--text-overline);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--n-500);
+}
+
+.ds-display {
+  font: var(--text-display);
+  color: var(--n-900);
+}
+
+.ds-h2 {
+  font: var(--text-h2);
+  color: var(--n-800);
+}
+
+.ds-h3 {
+  font: var(--text-h3);
+  color: var(--n-800);
+}
+
+.ds-body {
+  font: var(--text-body);
+  color: var(--n-600);
+}
+
+.ds-label {
+  font: var(--text-label);
+  color: var(--n-700);
+}
+
+.ds-caption {
+  font: var(--text-caption);
+  color: var(--n-500);
+}
+
+/* Buttons */
+.btn {
+  appearance: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font: var(--text-label);
+  padding: 10px 16px;
+  border-radius: var(--radius-full);
+  transition: background var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--a-500);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--a-500);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--a-600);
+}
+
+.btn-secondary {
+  background: var(--n-0);
+  border-color: var(--n-200);
+  color: var(--n-700);
+}
+
+.btn-secondary:hover {
+  border-color: var(--n-300);
+  background: var(--n-50);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--n-600);
+  padding: 8px 6px;
+}
+
+.btn-ghost:hover {
+  color: var(--n-800);
+}
+
+.btn-danger {
+  background: var(--danger-500);
+  color: #fff;
+}
+
+.btn-block {
+  width: 100%;
+  text-align: center;
+}
+
+/* Cards */
+.ds-card {
+  background: var(--n-0);
+  border: 1px solid var(--n-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-1);
+}
+
+/* Forms */
+.ds-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ds-input {
+  border: 1px solid var(--n-200);
+  border-radius: var(--radius-md);
+  background: var(--n-0);
+  color: var(--n-800);
+  font: var(--text-body);
+  padding: 10px 12px;
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+
+.ds-input:focus-visible {
+  outline: none;
+  border-color: var(--a-500);
+  box-shadow: 0 0 0 3px var(--a-50);
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-full);
+  font: var(--text-caption);
+  padding: 4px 10px;
+}
+
+.badge-success {
+  background: var(--success-100);
+  color: var(--success-500);
+}
+
+.badge-warning {
+  background: var(--warning-100);
+  color: var(--warning-500);
+}
+
+.badge-danger {
+  background: var(--danger-100);
+  color: var(--danger-500);
+}
+
+.badge-info {
+  background: var(--info-100);
+  color: var(--info-500);
+}
+
+.badge-neutral {
+  background: var(--n-100);
+  color: var(--n-600);
+}
+
+/* Record control */
+.record-control {
+  width: 168px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+  background: var(--a-500);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  border: none;
+  cursor: pointer;
+  transition: background var(--motion-fast);
+}
+
+.record-control:hover {
+  background: var(--a-600);
+}
+
+.record-control:focus-visible {
+  outline: 2px solid var(--n-900);
+  outline-offset: 3px;
+}
+
+.record-control.is-recording {
+  background: var(--danger-500);
+  animation: recordPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes recordPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(197, 58, 42, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(197, 58, 42, 0);
+  }
+}
+
+.record-control .rc-label {
+  font: var(--text-overline);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+}
+
+.record-control .rc-time {
+  margin-top: 6px;
+  font: var(--text-h2);
+  color: #fff;
+}
+
+/* Waveform */
+.waveform {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 34px;
+}
+
+.waveform span {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--a-400);
+  animation: wavePulse 1s ease-in-out infinite;
+}
+
+.waveform span:nth-child(3n) {
+  animation-delay: 0.15s;
+}
+
+.waveform span:nth-child(4n) {
+  animation-delay: 0.3s;
+}
+
+@keyframes wavePulse {
+  0%,
+  100% {
+    height: 6px;
+    opacity: 0.5;
+  }
+  50% {
+    height: 28px;
+    opacity: 1;
+  }
+}
+
+/* Stepper */
+.stepper {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.step {
+  flex: 1;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.step-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--n-200);
+  overflow: hidden;
+}
+
+.step-track i {
+  display: block;
+  height: 100%;
+  background: var(--a-500);
+}
+
+.step.is-done .step-track i {
+  width: 100%;
+  background: var(--success-500);
+}
+
+.step.is-active .step-track i {
+  width: 60%;
+}
+
+.step.is-pending .step-track i {
+  width: 0%;
+}
+
+.step-label {
+  font: var(--text-caption);
+  color: var(--n-500);
+}
+
+.step.is-active .step-label {
+  color: var(--a-500);
+  font-weight: 700;
+}
+
+.step.is-done .step-label {
+  color: var(--success-500);
+  font-weight: 700;
+}
+
+/* Checklist */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--n-200);
+  border-radius: var(--radius-md);
+  background: var(--n-0);
+}
+
+.check-row + .check-row {
+  margin-top: var(--space-2);
+}
+
+.check-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+}
+
+.check-icon.ok {
+  background: var(--success-100);
+  color: var(--success-500);
+}
+
+.check-icon.missing {
+  background: var(--warning-100);
+  color: var(--warning-500);
+}
+
+/* Callout */
+.callout {
+  border: 1px solid var(--n-200);
+  border-radius: var(--radius-md);
+  background: var(--n-50);
+  padding: var(--space-3) var(--space-4);
+  font: var(--text-caption);
+  color: var(--n-600);
+}
+
+.callout strong {
+  color: var(--n-800);
+}
+
+/* Table-ish list */
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--n-100);
+}
+
+.data-row:last-child {
+  border-bottom: none;
+}
+
+/* Focus reset safety net */
+a,
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--a-500);
+  outline-offset: 2px;
+}

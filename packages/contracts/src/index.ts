@@ -15,6 +15,7 @@ export const SessionStageSchema = z.enum([
   "transcribing",
   "extracting",
   "follow_up_required",
+  "review_ready",
   "drafting",
   "publishing",
   "completed",

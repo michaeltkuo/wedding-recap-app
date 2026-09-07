@@ -62,7 +62,7 @@ export function getGoogleOAuthStartUrl(state: string) {
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: true,
-    scope: API_CONFIG.google.scopes,
+    scope: [...API_CONFIG.google.scopes],
     state
   });
 }
@@ -90,8 +90,8 @@ export async function handleGoogleOAuthCallback(code: string) {
   const email = await fetchGoogleEmail(client);
 
   googleAuthStore.setConnection({
-    accessToken: tokens.access_token,
-    expiryDate: tokens.expiry_date,
+    accessToken: tokens.access_token ?? undefined,
+    expiryDate: tokens.expiry_date ?? undefined,
     email,
     connectedAt: new Date().toISOString(),
     refreshToken: tokens.refresh_token ?? googleAuthStore.getConnection()!.refreshToken

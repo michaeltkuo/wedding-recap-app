@@ -6,6 +6,8 @@ type UploadRecord = SignUploadResponse & {
   sizeBytes: number;
   idempotencyKey: string;
   used: boolean;
+  content?: Buffer;
+  contentType?: string;
 };
 
 type SessionInternal = SessionResult & {
@@ -89,10 +91,18 @@ export class SessionStore {
     return record;
   }
 
+  saveUploadContent(uploadToken: string, content: Buffer, contentType: string) {
+    const record = this.getUpload(uploadToken);
+    this.uploads.set(uploadToken, { ...record, content, contentType });
+  }
+
   consumeUpload(uploadToken: string) {
     const record = this.getUpload(uploadToken);
     if (record.used) {
       throw new Error("Upload token already used");
+    }
+    if (!record.content) {
+      throw new Error("Audio upload has not been received");
     }
     record.used = true;
     this.uploads.set(uploadToken, record);

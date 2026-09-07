@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Option C - Recap Studio Tape Deck</title>
+    <link rel="stylesheet" href="./mockup-option-c.css" />
+  </head>
+  <body>
+    <main class="c-prototype">
+      <header class="c-concept-head">
+        <div>
+          <p class="c-overline">Option C / The Tape Deck</p>
+          <h1>An audio-first field workspace for the end of a wedding day.</h1>
+          <p class="c-concept-copy">
+            Capture starts as a focused recording experience. Story cues support the contractor while they speak,
+            then coverage and delivery take over only after the tape stops.
+          </p>
+        </div>
+        <nav class="c-links" aria-label="Mockup options">
+          <a href="./mockup-option-a.html">Option A</a>
+          <a href="./mockup-option-b.html">Option B</a>
+          <a class="current" href="./mockup-option-c.html" aria-current="page">Option C</a>
+          <a href="./style-guide.html">Prior design system</a>
+        </nav>
+      </header>
+
+      <div class="c-review-nav">
+        <p class="c-overline">Walk through the working states</p>
+        <div id="state-switcher" class="c-state-switcher" aria-label="Preview state"></div>
+      </div>
+
+      <section class="c-stage-grid" aria-label="Desktop and mobile mockups">
+        <div class="c-preview">
+          <div class="c-preview-label"><span>Desktop application</span><span id="desktop-state-label"></span></div>
+          <div id="desktop-stage" class="c-desktop-frame"></div>
+        </div>
+        <div class="c-preview">
+          <div class="c-preview-label"><span>Mobile application</span><span id="mobile-state-label"></span></div>
+          <div class="c-phone-frame">
+            <div class="c-phone-speaker"></div>
+            <div id="mobile-stage"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
+    <script>
+      const wave = (count = 25) => {
+        const heights = [28, 44, 62, 38, 74, 105, 68, 126, 84, 48, 92, 150, 96, 62, 132, 78, 42, 112, 66, 96, 54, 82, 38, 58, 30];
+        return Array.from({ length: count }, (_, index) => {
+          const height = heights[index % heights.length];
+          return `<i style="--h:${height}px;--d:${(index % 6) * 90}ms"></i>`;
+        }).join("");
+      };
+
+      const desktopShell = (content, mode = "dark", section = "capture") => `
+        <div class="c-desktop-app ${mode}">
+          <div class="c-desktop-shell">
+            <aside class="c-rail">
+              <div class="c-rail-brand"><span class="c-brand-glyph">R</span><span>RECAP / STUDIO</span></div>
+              <nav class="c-rail-nav" aria-label="Application">
+                <button type="button" class="${section === "capture" ? "active" : ""}" data-step="0"><i data-lucide="mic-2"></i>Capture</button>
+                <button type="button" class="${section === "library" ? "active" : ""}" data-step="4"><i data-lucide="library"></i>Library</button>
+                <button type="button"><i data-lucide="circle-help"></i>Help</button>
+              </nav>
+              <div class="c-rail-bottom">
+                <p class="c-overline">Delivery desk</p>
+                <p>michael@authormadephoto.com</p>
+              </div>
+            </aside>
+            <section class="c-desk-main">${content}</section>
+          </div>
+        </div>
+      `;
+
+      const mobileNav = (section = "capture") => `
+        <nav class="c-mobile-nav" aria-label="Application">
+          <button type="button" class="${section === "capture" ? "active" : ""}" data-step="0"><i data-lucide="mic-2"></i><span>CAPTURE</span></button>
+          <button type="button" class="${section === "library" ? "active" : ""}" data-step="4"><i data-lucide="library"></i><span>LIBRARY</span></button>
+          <button type="button"><i data-lucide="circle-help"></i><span>HELP</span></button>
+        </nav>
+      `;
+
+      const mobileShell = (content, mode = "dark", section = "capture") => `
+        <div class="c-phone-app ${mode}">
+          ${content}
+        </div>
+      `;
+
+      const steps = [
+        {
+          name: "Ready",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar">
+              <div class="c-desk-location"><span class="rec-dot"></span>New field note</div>
+              <button class="c-icon-button" type="button" aria-label="Session settings"><i data-lucide="settings-2"></i></button>
+            </header>
+            <div class="c-setup-main">
+              <section class="c-setup-intro">
+                <p class="c-overline">Saturday / Sep 7</p>
+                <h2>Nora + Ben</h2>
+                <p class="c-session-meta"><strong>Plaza Venezia</strong><br />Orlando, FL</p>
+                <div class="c-rule"></div>
+                <p class="c-setup-copy">Tell the day in your own order. When you stop, we will shape the raw recap into an editorial handoff.</p>
+              </section>
+              <section class="c-setup-launch">
+                <button class="c-record-launch" type="button" data-step="1">
+                  <span><i data-lucide="mic"></i>New tape<strong>Record recap</strong></span>
+                </button>
+                <p class="c-launch-caption">One tap to start. 4-7 minutes is usually enough.</p>
+                <button class="c-import-button" type="button">Import an audio file</button>
+              </section>
+            </div>
+            <footer class="c-bottom-strip"><i data-lucide="send"></i><span>Finished recaps are delivered to <strong>Michael's editorial desk</strong>.</span></footer>
+          `),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:40</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><span class="c-mobile-wordmark">REC / STUDIO</span><button class="c-mobile-icon" type="button" aria-label="Session settings"><i data-lucide="settings-2"></i></button></header>
+            <section class="c-mobile-setup">
+              <p class="c-overline">Saturday / Sep 7</p>
+              <h2 class="c-mobile-event">Nora<br />+ Ben</h2>
+              <p class="c-mobile-event-meta">Plaza Venezia<br />Orlando, FL</p>
+              <p class="c-mobile-guide">Talk through the day as you remember it. Gentle story cues will be here when you need them.</p>
+              <div class="c-mobile-launch-wrap">
+                <button class="c-mobile-launch" type="button" data-step="1"><span><i data-lucide="mic"></i><strong>Record</strong><span>New tape</span></span></button>
+              </div>
+              <p class="c-mobile-footer-note"><i data-lucide="send"></i>Delivered to Michael when you are done.</p>
+            </section>
+            ${mobileNav("capture")}
+          `)
+        },
+        {
+          name: "Record",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar">
+              <div class="c-desk-location"><span class="rec-dot"></span>Nora + Ben / Plaza Venezia</div>
+              <button class="c-icon-button" type="button" aria-label="Pause recording"><i data-lucide="pause"></i></button>
+            </header>
+            <div class="c-recording-main">
+              <section class="c-recorder-stage">
+                <div class="c-recorder-status"><div class="c-live-label"><span class="rec-dot"></span>Recording</div><time class="c-elapsed">03:18</time></div>
+                <div class="c-wave-stage"><div class="c-waveform">${wave(33)}</div></div>
+                <div class="c-recorder-controls">
+                  <button class="c-control-button" type="button"><i data-lucide="bookmark-plus"></i>Mark moment</button>
+                  <button class="c-stop-button" type="button" aria-label="Stop recording" data-step="2"><span></span></button>
+                  <button class="c-control-button" type="button"><i data-lucide="pause"></i>Pause</button>
+                </div>
+              </section>
+              <aside class="c-cue-rail">
+                <p class="c-overline">Story cue / 03</p>
+                <p class="c-cue-question">What made the ceremony feel like them?</p>
+                <p class="c-cue-note">You can answer now, skip it, or return to it after the recording.</p>
+                <div class="c-cue-actions"><button type="button">Skip cue</button><button type="button">Mark moment</button></div>
+                <div class="c-cue-list"><div class="done"><span>01 / Arrival</span><span>NOTED</span></div><div class="done"><span>02 / Portraits</span><span>NOTED</span></div><div><span>03 / Ceremony</span><span>OPEN</span></div><div><span>04 / Reception</span><span>NEXT</span></div></div>
+              </aside>
+            </div>
+          `),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:43</span><span><span class="rec-dot"></span> REC</span></div>
+            <header class="c-mobile-topbar"><span class="c-mobile-wordmark">NORA + BEN</span><button class="c-mobile-icon" type="button" aria-label="Pause recording"><i data-lucide="pause"></i></button></header>
+            <section class="c-mobile-recording">
+              <div class="c-mobile-rec-line"><span><span class="rec-dot"></span> Recording</span><time>03:18</time></div>
+              <div class="c-mobile-wave-area"><div class="c-waveform c-mobile-waveform">${wave(21)}</div></div>
+              <div class="c-mobile-cue"><p class="c-overline">Story cue / 03</p><p>What made the ceremony feel like them?</p></div>
+              <div class="c-mobile-rec-controls"><button class="c-control-button" type="button">Mark</button><button class="c-mobile-stop" type="button" aria-label="Stop recording" data-step="2"><i></i></button><button class="c-control-button" type="button">Pause</button></div>
+            </section>
+            ${mobileNav("capture")}
+          `)
+        },
+        {
+          name: "Shape",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Nora + Ben / Review</div><button class="c-icon-button" type="button" aria-label="Open transcript"><i data-lucide="file-text"></i></button></header>
+            <section class="c-review-main">
+              <div class="c-review-heading"><div><p class="c-overline">Coverage map</p><h2>The story is taking shape.</h2><p>We found the essential parts of the day. One detail would make the handoff stronger.</p></div><span class="c-score">4 / 5 FOUND</span></div>
+              <div class="c-coverage-list">
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Setting</strong><p>Plaza Venezia, Orlando, Florida</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Ceremony</strong><p>Private vows, garden aisle, candlelight</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Portraits</strong><p>Soft lakeside portraits after sunset</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Reception</strong><p>Heartfelt toasts and a packed dance floor</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon gap"><i data-lucide="plus"></i></span><strong>Weather</strong><p>Not mentioned in the tape</p><span class="c-coverage-status gap">Open</span></div>
+              </div>
+              <div class="c-gap-prompt"><div><h3>One quick detail: what was the weather like?</h3><p>Answer by voice in about ten seconds, or send the recap as it is.</p></div><button class="c-secondary-action" type="button"><i data-lucide="mic"></i>Answer out loud</button></div>
+              <div class="c-review-actions"><button class="c-secondary-action" type="button"><i data-lucide="file-text"></i>Read transcript</button><button class="c-primary-action" type="button" data-step="3"><i data-lucide="send"></i>Send recap</button></div>
+            </section>
+          `, "light"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:47</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><button class="c-mobile-icon" type="button" aria-label="Back to recording"><i data-lucide="arrow-left"></i></button><span class="c-mobile-wordmark">REVIEW</span><button class="c-mobile-icon" type="button" aria-label="Open transcript"><i data-lucide="file-text"></i></button></header>
+            <section class="c-phone-review">
+              <p class="c-overline">Coverage map / 4 of 5</p><h2>The story is there.</h2><p>One optional detail would complete the handoff.</p>
+              <div class="c-phone-coverage">
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Setting</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Ceremony</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Portraits</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Reception</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon gap"><i data-lucide="plus"></i></span><strong>Weather</strong><span class="c-coverage-status gap">Open</span></div>
+              </div>
+              <div class="c-phone-gap"><strong>What was the weather like?</strong><button class="c-primary-action" type="button"><i data-lucide="mic"></i>Answer out loud</button></div>
+              <div class="c-phone-bottom-actions"><button class="c-secondary-action" type="button">Read transcript</button><button class="c-primary-action" type="button" data-step="3">Send recap</button></div>
+            </section>
+            ${mobileNav("capture")}
+          `, "light")
+        },
+        {
+          name: "Deliver",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Nora + Ben / Delivery</div><button class="c-icon-button" type="button" aria-label="Open library" data-step="4"><i data-lucide="library"></i></button></header>
+            <section class="c-dispatch-main">
+              <span class="c-dispatch-mark"><i data-lucide="check"></i></span>
+              <p class="c-overline" style="margin-top:20px">Dispatch complete / 04:12 PM</p>
+              <h2>Your recap is on its way.</h2>
+              <p>The original tape, structured notes, and a working blog draft are bundled together for editorial review.</p>
+              <div class="c-delivery-path"><div class="c-delivery-step"><span>Tape saved</span><small>COMPLETE</small></div><div class="c-delivery-step"><span>Transcript shaped</span><small>COMPLETE</small></div><div class="c-delivery-step"><span>Draft built</span><small>COMPLETE</small></div><div class="c-delivery-step"><span>Handoff sent</span><small>LIVE</small></div></div>
+              <div class="c-delivery-destination"><i data-lucide="send"></i><span>Delivered to <strong>michael@authormadephoto.com</strong></span></div>
+              <button class="c-doc-action" type="button"><i data-lucide="file-text"></i>Open working draft</button>
+            </section>
+          `, "light"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:49</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><span class="c-mobile-wordmark">DELIVERY</span><button class="c-mobile-icon" type="button" aria-label="Open library" data-step="4"><i data-lucide="library"></i></button></header>
+            <section class="c-phone-dispatch"><span class="c-dispatch-mark"><i data-lucide="check"></i></span><p class="c-overline" style="margin-top:16px">Sent / 04:12 PM</p><h2>Recap delivered.</h2><p>Your tape and draft have reached Michael's editorial desk.</p><div class="c-delivery-path"><div class="c-delivery-step"><span>Tape</span><small>DONE</small></div><div class="c-delivery-step"><span>Text</span><small>DONE</small></div><div class="c-delivery-step"><span>Draft</span><small>DONE</small></div><div class="c-delivery-step"><span>Sent</span><small>LIVE</small></div></div><div class="c-delivery-destination"><i data-lucide="send"></i><span>To <strong>michael@authormadephoto.com</strong></span></div><button class="c-doc-action" type="button"><i data-lucide="file-text"></i>Open working draft</button></section>
+            ${mobileNav("capture")}
+          `, "light")
+        },
+        {
+          name: "Library",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Library / 18 recaps</div><button class="c-icon-button" type="button" aria-label="Start a new recap" data-step="0"><i data-lucide="mic"></i></button></header>
+            <section class="c-library-main">
+              <div class="c-library-heading"><div><p class="c-overline" style="color:#a9b1ba">Field notes</p><h2 style="color:#f4f6f8">Your recent tapes</h2><p style="color:#a9b1ba">Every recap stays available with its delivery outcome.</p></div><button class="c-primary-action" type="button" data-step="0"><i data-lucide="mic"></i>New recap</button></div>
+              <div class="c-library-list">
+                <div class="c-library-row"><span class="c-library-index">01</span><div><strong>Nora + Ben</strong><p>Plaza Venezia / Sep 7</p></div><span class="c-library-duration">04:12</span><span class="c-library-status sent">SENT</span></div>
+                <div class="c-library-row"><span class="c-library-index">02</span><div><strong>Alex + Sam</strong><p>Cypress Grove / Sep 6</p></div><span class="c-library-duration">05:09</span><span class="c-library-status sent">SENT</span></div>
+                <div class="c-library-row"><span class="c-library-index">03</span><div><strong>Jamie + Morgan</strong><p>The Acre / Sep 5</p></div><span class="c-library-duration">03:43</span><span class="c-library-status draft">DRAFT READY</span></div>
+                <div class="c-library-row"><span class="c-library-index">04</span><div><strong>Quinn + Riley</strong><p>Casa Feliz / Sep 1</p></div><span class="c-library-duration">06:22</span><span class="c-library-status retry">NEEDS RETRY</span></div>
+              </div>
+            </section>
+          `, "dark", "library"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:52</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><span class="c-mobile-wordmark">REC / STUDIO</span><button class="c-mobile-icon" type="button" aria-label="Search recordings"><i data-lucide="search"></i></button></header>
+            <section class="c-phone-library"><p class="c-overline">Field notes / 18</p><h2>Recent tapes</h2><p>Your recaps and delivery status, all in one place.</p><div class="c-phone-library-list"><div class="c-phone-library-row"><div><strong>Nora + Ben</strong><span>PLAZA VENEZIA / 04:12</span></div><span class="c-library-status sent">SENT</span></div><div class="c-phone-library-row"><div><strong>Alex + Sam</strong><span>CYPRESS GROVE / 05:09</span></div><span class="c-library-status sent">SENT</span></div><div class="c-phone-library-row"><div><strong>Jamie + Morgan</strong><span>THE ACRE / 03:43</span></div><span class="c-library-status draft">DRAFT</span></div><div class="c-phone-library-row"><div><strong>Quinn + Riley</strong><span>CASA FELIZ / 06:22</span></div><span class="c-library-status retry">RETRY</span></div></div><button class="c-phone-new-record" type="button" aria-label="Start a new recap" data-step="0"><i data-lucide="mic"></i></button>${mobileNav("library")}</section>
+          `, "dark")
+        }
+      ];
+
+      let currentStep = 0;
+      const stateSwitcher = document.getElementById("state-switcher");
+      const desktopStage = document.getElementById("desktop-stage");
+      const mobileStage = document.getElementById("mobile-stage");
+      const desktopLabel = document.getElementById("desktop-state-label");
+      const mobileLabel = document.getElementById("mobile-state-label");
+
+      function renderIcons() {
+        if (window.lucide) {
+          window.lucide.createIcons({ attrs: { "stroke-width": 1.8 } });
+        }
+      }
+
+      function renderSwitcher() {
+        stateSwitcher.innerHTML = steps
+          .map((step, index) => `<button type="button" class="${currentStep === index ? "active" : ""}" data-step="${index}" aria-pressed="${currentStep === index}">${index + 1}. ${step.name}</button>`)
+          .join("");
+      }
+
+      function renderStep() {
+        const step = steps[currentStep];
+        desktopStage.innerHTML = step.desktop;
+        mobileStage.innerHTML = step.mobile;
+        desktopLabel.textContent = `${currentStep + 1} / ${step.name}`;
+        mobileLabel.textContent = step.name;
+        renderSwitcher();
+        renderIcons();
+      }
+
+      document.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-step]");
+        if (!trigger) return;
+        const nextStep = Number(trigger.dataset.step);
+        if (Number.isInteger(nextStep) && steps[nextStep]) {
+          currentStep = nextStep;
+          renderStep();
+        }
+      });
+
+      renderStep();
+    </script>
+  </body>
+</html>

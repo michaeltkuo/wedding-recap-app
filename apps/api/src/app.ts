@@ -21,7 +21,8 @@ import {
   metricsRegistry,
   publishSession,
   runPipeline,
-  signUpload
+  signUpload,
+  uploadAudio
 } from "./lib/pipeline.js";
 
 export function createApp() {
@@ -113,6 +114,23 @@ export function createApp() {
       response.status(400).json({ error: error instanceof Error ? error.message : "Invalid upload request" });
     }
   });
+
+  app.put(
+    "/api/uploads/:uploadToken",
+    express.raw({ type: () => true, limit: API_CONFIG.upload.maxSizeBytes }),
+    (request, response) => {
+      try {
+        assertContractorToken(request.header("x-contractor-token"));
+        if (!Buffer.isBuffer(request.body)) {
+          throw new Error("Audio upload body is required");
+        }
+        const result = uploadAudio(request.params.uploadToken, request.body, request.header("content-type") ?? "");
+        response.status(201).json(result);
+      } catch (error) {
+        response.status(400).json({ error: error instanceof Error ? error.message : "Audio upload failed" });
+      }
+    }
+  );
 
   app.post("/api/transcriptions", async (request, response) => {
     try {

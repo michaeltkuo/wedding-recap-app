@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import {
   BlogOutputSchema,
   buildObjectKey,
-  PERFORMANCE_BUDGETS_MS,
   PipelineStartRequestSchema,
   RecapSchema,
   SessionResultSchema,
@@ -220,7 +219,7 @@ export function signUpload(request: SignUploadRequest) {
   const response = SignUploadResponseSchema.parse({
     uploadToken,
     objectKey: buildObjectKey(parsed.sessionId, parsed.fileName),
-    uploadUrl: `https://storage.local/upload/${uploadToken}`,
+    uploadUrl: `${API_CONFIG.origin}/api/uploads/${uploadToken}`,
     expiresAt: new Date(Date.now() + API_CONFIG.upload.ttlSeconds * 1000).toISOString(),
     ttlSeconds: API_CONFIG.upload.ttlSeconds,
     singleUse: true
@@ -237,17 +236,44 @@ export function signUpload(request: SignUploadRequest) {
 
   const session = sessionStore.getSession(parsed.sessionId);
   sessionStore.updateStage(parsed.sessionId, transitionStage(session.stage, "uploading"), 10);
-  sessionStore.updateStage(parsed.sessionId, transitionStage("uploading", "uploaded"), 20);
 
   return response;
 }
 
-export async function runPipeline(request: PipelineStartRequest) {
+export function uploadAudio(uploadToken: string, content: Buffer, contentType: string) {
+  const upload = sessionStore.getUpload(uploadToken);
+  const mimeType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+
+  if (!mimeType || upload.mimeType !== mimeType) {
+    throw new Error("Audio content type does not match the signed upload");
+  }
+  if (content.length === 0) {
+    throw new Error("Audio upload is empty");
+  }
+  if (content.length !== upload.sizeBytes) {
+    throw new Error("Audio upload size does not match the signed upload");
+  }
+
+  const session = sessionStore.getSession(upload.sessionId);
+  if (session.stage !== "uploading") {
+    throw new Error("Session is not ready to receive audio");
+  }
+
+  sessionStore.saveUploadContent(uploadToken, content, mimeType);
+  sessionStore.updateStage(upload.sessionId, transitionStage("uploading", "uploaded"), 20);
+  return { accepted: true, sessionId: upload.sessionId };
+}
+
+export function runPipeline(request: PipelineStartRequest) {
   const parsed = PipelineStartRequestSchema.parse(request);
 
   const result = sessionStore.rememberIdempotent(parsed.idempotencyKey, () => {
     const existing = sessionStore.getSession(parsed.sessionId);
     if (existing.stage !== "follow_up_required") {
+      const upload = sessionStore.getUpload(parsed.uploadToken);
+      if (upload.sessionId !== parsed.sessionId) {
+        throw new Error("Upload does not belong to this session");
+      }
       sessionStore.consumeUpload(parsed.uploadToken);
     }
 
@@ -256,7 +282,6 @@ export async function runPipeline(request: PipelineStartRequest) {
     sessionStore.updateSession(parsed.sessionId, { simulation: parsed.simulate });
 
     return jobQueue.enqueue(parsed.idempotencyKey, async () => {
-      const startedAt = Date.now();
       const transcriptionDelayMs = parsed.simulate?.transcriptionDelayMs ?? 25;
       await delay(transcriptionDelayMs);
       const transcript = buildTranscript(parsed.sessionId, parsed.transcriptText);
@@ -290,64 +315,7 @@ export async function runPipeline(request: PipelineStartRequest) {
 
       const recap = extractionResult.recap!;
       sessionStore.saveRecap(parsed.sessionId, recap, []);
-      sessionStore.updateStage(parsed.sessionId, transitionStage("extracting", "drafting"), 75);
-      const draftDelayMs = parsed.simulate?.generationDelayMs ?? 25;
-      await delay(draftDelayMs);
-      const blogOutput = buildBlogOutput(recap);
-      sessionStore.saveBlogOutput(parsed.sessionId, blogOutput);
-      sessionStore.updateSession(parsed.sessionId, {
-        metrics: {
-          ...sessionStore.getSession(parsed.sessionId).metrics,
-          draftMs: draftDelayMs
-        }
-      });
-      metricsRegistry.record("draftMs", draftDelayMs);
-
-      sessionStore.updateStage(parsed.sessionId, transitionStage("drafting", "publishing"), 90);
-      const publishStart = Date.now();
-      const publishMode = parsed.simulate?.publishMode ?? "normal";
-      if (publishMode === "failed") {
-        sessionStore.updateStage(parsed.sessionId, transitionStage("publishing", "error"), 100, "Google Docs publish failed");
-        return;
-      }
-
-      if (publishMode === "queued") {
-        sessionStore.updateSession(parsed.sessionId, {
-          googleDoc: buildFallbackGoogleDoc(parsed.sessionId, "queued")
-        });
-      } else if (canPublishToGoogleDocs()) {
-        const googleDoc = await publishGoogleDoc(blogOutput);
-        sessionStore.updateSession(parsed.sessionId, { googleDoc });
-      } else if (API_CONFIG.google.clientId.length > 0 || API_CONFIG.google.clientSecret.length > 0) {
-        sessionStore.updateStage(parsed.sessionId, transitionStage("publishing", "error"), 100, "Google OAuth is not connected");
-        return;
-      } else {
-        sessionStore.updateSession(parsed.sessionId, {
-          googleDoc: buildFallbackGoogleDoc(parsed.sessionId, "ready")
-        });
-      }
-      const publishMs = Date.now() - publishStart;
-      sessionStore.updateSession(parsed.sessionId, {
-        metrics: {
-          ...sessionStore.getSession(parsed.sessionId).metrics,
-          uploadMs: Math.min(transcriptionDelayMs, 10),
-          publishMs
-        }
-      });
-      metricsRegistry.record("publishMs", publishMs);
-
-      if (publishMode === "queued") {
-        sessionStore.updateStage(parsed.sessionId, transitionStage("publishing", "completed"), 100);
-        const totalElapsed = Date.now() - startedAt;
-        if (totalElapsed > PERFORMANCE_BUDGETS_MS.endToEnd) {
-          sessionStore.updateSession(parsed.sessionId, {
-            errorMessage: "Generation exceeded budget; contractor should be notified asynchronously."
-          });
-        }
-        return;
-      }
-
-      sessionStore.updateStage(parsed.sessionId, transitionStage("publishing", "completed"), 100);
+      sessionStore.updateStage(parsed.sessionId, transitionStage("extracting", "review_ready"), 75);
       SessionResultSchema.parse(sessionStore.getSession(parsed.sessionId));
     });
   });
@@ -378,37 +346,66 @@ export function draftSession(sessionId: string) {
   if (!session.recap) {
     throw new Error("Recap is not available");
   }
+
+  if (session.stage === "review_ready") {
+    sessionStore.updateStage(sessionId, transitionStage("review_ready", "drafting"), 85);
+  }
+
+  const draftDelayMs = session.simulation?.generationDelayMs ?? 25;
   const blogOutput = buildBlogOutput(session.recap);
   sessionStore.saveBlogOutput(sessionId, blogOutput);
+  sessionStore.updateSession(sessionId, {
+    metrics: {
+      ...sessionStore.getSession(sessionId).metrics,
+      draftMs: draftDelayMs
+    }
+  });
+  metricsRegistry.record("draftMs", draftDelayMs);
   return { status: "success", blogOutput };
 }
 
 export async function publishSession(sessionId: string, publishMode: "normal" | "queued" | "failed" = "normal") {
   const session = sessionStore.getSession(sessionId);
-  if (!session.blogOutput) {
-    throw new Error("Draft is not available");
+  if (!session.recap) {
+    throw new Error("Recap is not available");
   }
+
+  const blogOutput = session.blogOutput ?? draftSession(sessionId).blogOutput;
+  const afterDraft = sessionStore.getSession(sessionId);
+  if (afterDraft.stage === "drafting") {
+    sessionStore.updateStage(sessionId, transitionStage("drafting", "publishing"), 90);
+  } else if (afterDraft.stage !== "publishing") {
+    throw new Error("Recap is not ready to send");
+  }
+
   if (publishMode === "failed") {
+    sessionStore.updateStage(sessionId, transitionStage("publishing", "error"), 100, "Google Docs publish failed");
     throw new Error("Google Docs publish failed");
   }
 
+  const publishStart = Date.now();
+  let googleDoc;
   if (publishMode === "queued") {
-    const googleDoc = buildFallbackGoogleDoc(sessionId, "queued");
-    sessionStore.updateSession(sessionId, { googleDoc });
-    return { status: publishMode, googleDoc };
-  }
-
-  if (canPublishToGoogleDocs()) {
-    const googleDoc = await publishGoogleDoc(session.blogOutput);
-    sessionStore.updateSession(sessionId, { googleDoc });
-    return { status: publishMode, googleDoc };
-  }
-
-  if (API_CONFIG.google.clientId.length > 0 || API_CONFIG.google.clientSecret.length > 0) {
+    googleDoc = buildFallbackGoogleDoc(sessionId, "queued");
+  } else if (canPublishToGoogleDocs()) {
+    googleDoc = await publishGoogleDoc(blogOutput);
+  } else if (API_CONFIG.google.clientId.length > 0 || API_CONFIG.google.clientSecret.length > 0) {
+    sessionStore.updateStage(sessionId, transitionStage("publishing", "error"), 100, "Google OAuth is not connected");
     throw new Error("Google OAuth is not connected");
+  } else {
+    googleDoc = buildFallbackGoogleDoc(sessionId, "ready");
   }
 
-  const googleDoc = buildFallbackGoogleDoc(sessionId, "ready");
   sessionStore.updateSession(sessionId, { googleDoc });
+  const publishMs = Date.now() - publishStart;
+  sessionStore.updateSession(sessionId, {
+    metrics: {
+      ...sessionStore.getSession(sessionId).metrics,
+      publishMs
+    }
+  });
+  metricsRegistry.record("publishMs", publishMs);
+  const beforeCompletion = sessionStore.getSession(sessionId);
+  sessionStore.updateStage(sessionId, transitionStage(beforeCompletion.stage, "completed"), 100);
   return { status: publishMode, googleDoc };
 }
