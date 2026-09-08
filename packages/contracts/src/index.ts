@@ -167,7 +167,7 @@ export const PipelineStartRequestSchema = z.object({
   sessionId: z.string().min(1),
   uploadToken: z.string().min(1),
   idempotencyKey: z.string().min(8),
-  transcriptText: z.string().min(1),
+  transcriptText: z.string().optional(),
   simulate: PipelineSimulationSchema
 });
 

@@ -27,7 +27,24 @@ import {
 
 export function createApp() {
   const app = express();
-  app.use(cors({ origin: API_CONFIG.web.origin, credentials: true }));
+  app.use(
+    cors({
+      origin(requestOrigin, callback) {
+        if (!requestOrigin) {
+          callback(null, true);
+          return;
+        }
+
+        if (API_CONFIG.web.origins.includes(requestOrigin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`CORS blocked for origin: ${requestOrigin}`));
+      },
+      credentials: true
+    })
+  );
   app.use(express.json());
 
   function readCookie(cookieHeader: string | undefined, cookieName: string) {

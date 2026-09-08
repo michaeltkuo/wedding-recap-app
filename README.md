@@ -75,8 +75,8 @@ See [docs/API.md](docs/API.md) for request and response details.
 
 ## Important Notes
 
-- This repo still falls back to a local Google Doc URL when OAuth is not configured, but it can publish to a real Google Doc once Google OAuth is connected.
-- Browser audio is received by the local API for the current in-memory prototype. Production storage, queueing, and transcription-provider integration remain separate infrastructure work.
+- This repo does not use fallback publish behavior. Google Docs delivery fails unless Google OAuth is connected.
+- Audio transcription and recap extraction are provider-backed and require `OPENAI_API_KEY`.
 - Contracts are the source of truth. Update shared schemas in `packages/contracts/src/index.ts` first when changing payload shapes.
 - QA artifacts are written under `.gstack/qa-reports/`.
 

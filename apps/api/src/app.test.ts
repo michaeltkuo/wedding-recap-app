@@ -104,7 +104,7 @@ describe("api", () => {
     expect(response.body.error).toMatch(/Audio upload has not been received/);
   });
 
-  it("pauses the happy path for review before explicit delivery", async () => {
+  it("pauses for review and fails publish when OAuth is not connected", async () => {
     const app = createApp();
     const { sessionId, uploadToken } = await createSessionAndUpload(app);
 
@@ -133,11 +133,11 @@ describe("api", () => {
       .set(contractorHeaders)
       .send({ sessionId, publishMode: "normal" });
 
-    expect(delivery.status).toBe(200);
-    expect(delivery.body.googleDoc.url).toContain("docs.google.com");
+    expect(delivery.status).toBe(400);
+    expect(delivery.body.error).toMatch(/connect Google OAuth first/);
 
     const result = await request(app).get(`/api/sessions/${sessionId}`).set(contractorHeaders);
-    expect(result.body.stage).toBe("completed");
+    expect(result.body.stage).toBe("error");
 
     const duplicateDelivery = await request(app)
       .post("/api/docs/publish")
@@ -169,7 +169,7 @@ describe("api", () => {
     expect(result.followUps.length).toBeGreaterThan(0);
   });
 
-  it("falls back to partial output after two schema failures", async () => {
+  it("moves to error after repeated extraction schema failures", async () => {
     const app = createApp();
     const { sessionId, uploadToken } = await createSessionAndUpload(app);
 
@@ -188,8 +188,8 @@ describe("api", () => {
       });
 
     const result = await waitForReview(app, sessionId);
-    expect(result.stage).toBe("partial");
-    expect(result.partial).toBe(true);
+    expect(result.stage).toBe("error");
+    expect(result.errorMessage).toMatch(/Extraction schema failed twice/);
   });
 
   it("keeps the pipeline idempotent for duplicate submissions", async () => {
@@ -200,7 +200,7 @@ describe("api", () => {
       uploadToken,
       idempotencyKey: `pipeline-duplicate-${sessionId}`,
       transcriptText:
-        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor.",
+        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor. moments: first look, private vows. portraits: sunset portraits by the lake. weather: warm and clear.",
       simulate: {
         extractionMode: "normal"
       }

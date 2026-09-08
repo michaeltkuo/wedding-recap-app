@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { dirname } from "node:path";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 import { google } from "googleapis";
 
@@ -22,15 +24,52 @@ export type GoogleAuthStatus = {
   authorizationUrl?: string;
 };
 
+function loadStoredConnection() {
+  try {
+    const raw = readFileSync(API_CONFIG.google.connectionFile, "utf8");
+    const parsed = JSON.parse(raw) as Partial<GoogleConnection>;
+    if (!parsed.refreshToken || !parsed.email || !parsed.connectedAt) {
+      return null;
+    }
+
+    return {
+      accessToken: parsed.accessToken,
+      expiryDate: parsed.expiryDate,
+      email: parsed.email,
+      connectedAt: parsed.connectedAt,
+      refreshToken: parsed.refreshToken
+    } as GoogleConnection;
+  } catch {
+    return null;
+  }
+}
+
+function persistConnection(connection: GoogleConnection | null) {
+  const connectionPath = API_CONFIG.google.connectionFile;
+  if (!connection) {
+    try {
+      rmSync(connectionPath, { force: true });
+    } catch {
+      return;
+    }
+    return;
+  }
+
+  mkdirSync(dirname(connectionPath), { recursive: true });
+  writeFileSync(connectionPath, `${JSON.stringify(connection, null, 2)}\n`, "utf8");
+}
+
 class GoogleAuthStore {
-  private connection: GoogleConnection | null = null;
+  private connection: GoogleConnection | null = loadStoredConnection();
 
   setConnection(connection: GoogleConnection) {
     this.connection = connection;
+    persistConnection(connection);
   }
 
   clearConnection() {
     this.connection = null;
+    persistConnection(null);
   }
 
   getConnection() {

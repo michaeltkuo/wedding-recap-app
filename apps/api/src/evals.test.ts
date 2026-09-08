@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runPipeline, signUpload, createSession, getSessionResult, publishSession, uploadAudio } from "./lib/pipeline.js";
+import { runPipeline, signUpload, createSession, draftSession, getSessionResult, uploadAudio } from "./lib/pipeline.js";
 import { API_CONFIG } from "./config.js";
 
 const baselineFixtures = [
@@ -42,7 +42,7 @@ describe("eval gates", () => {
         simulate: { extractionMode: "normal" }
       });
 
-      await publishSession(session.sessionId);
+      draftSession(session.sessionId);
 
       const result = getSessionResult(session.sessionId);
       const title = result.blogOutput?.primary_title.toLowerCase() ?? "";

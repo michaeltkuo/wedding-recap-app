@@ -70,20 +70,6 @@ const followUpTranscriptLabels: Record<string, string> = {
 
 const waveHeights = [24, 44, 66, 34, 78, 108, 58, 128, 84, 42, 92, 146, 72, 54, 120, 76, 38, 108, 66, 88, 48, 74, 34, 58, 28];
 
-function buildTranscriptSeed(eventDetails: EventDetails) {
-  return [
-    `couple: ${eventDetails.coupleNames}.`,
-    `venue: ${eventDetails.venueName}.`,
-    `city: ${eventDetails.cityState}.`,
-    "style: documentary romantic.",
-    "timeline: a thoughtful ceremony, relaxed portraits, and a full dance floor.",
-    "moments: private vows, a confetti exit.",
-    "portraits: relaxed portraits around the venue at sunset.",
-    "weather: warm with soft evening light.",
-    "reception: heartfelt toasts and a packed dance floor."
-  ].join(" ");
-}
-
 function normalizeAudioMimeType(audio: Blob, fileName?: string) {
   const fromBlob = audio.type.split(";", 1)[0]?.trim().toLowerCase();
   if (fromBlob && allowedMimeTypes.has(fromBlob)) {
@@ -353,7 +339,7 @@ export default function App() {
     };
   }, [sessionId, uiStage]);
 
-  async function processAudio(audio: Blob, transcriptText: string, existingSessionId?: string) {
+  async function processAudio(audio: Blob, transcriptText?: string, existingSessionId?: string) {
     const mimeType = normalizeAudioMimeType(audio, audio instanceof File ? audio.name : undefined);
     if (!mimeType) {
       transitionTo("error");
@@ -387,12 +373,13 @@ export default function App() {
 
       transitionTo("processing");
       setStatusMessage("Listening for the important parts of the day.");
-      await startPipeline({
+      const payload = {
         sessionId: targetSessionId,
         uploadToken: upload.uploadToken,
         idempotencyKey: `process-${targetSessionId}-${Date.now()}`,
-        transcriptText
-      });
+        ...(transcriptText?.trim() ? { transcriptText } : {})
+      };
+      await startPipeline(payload);
     } catch (processingError) {
       transitionTo("error");
       setStatusMessage(processingError instanceof Error ? processingError.message : "The recap could not be uploaded.");
@@ -421,7 +408,7 @@ export default function App() {
     }
 
     setCapturedAudio(audio);
-    await processAudio(audio, buildTranscriptSeed(eventDetails));
+    await processAudio(audio);
   }
 
   function handleAudioImport(event: ChangeEvent<HTMLInputElement>) {
@@ -431,7 +418,7 @@ export default function App() {
       return;
     }
     setCapturedAudio(audio);
-    void processAudio(audio, buildTranscriptSeed(eventDetails));
+    void processAudio(audio);
   }
 
   async function sendRecap() {
@@ -474,7 +461,7 @@ export default function App() {
     const answers = prompts
       .map((prompt) => `${followUpTranscriptLabels[prompt.field] ?? prompt.field}: ${followUpAnswers[prompt.field]}.`)
       .join(" ");
-    await processAudio(capturedAudio, `${buildTranscriptSeed(eventDetails)} ${answers}`, sessionId ?? undefined);
+    await processAudio(capturedAudio, answers, sessionId ?? undefined);
   }
 
   function startNewRecap() {
@@ -606,7 +593,8 @@ export default function App() {
     if (uiStage === "error") {
       return (
         <section className="error-workspace" aria-labelledby="error-heading">
-          <div className="error-content"><CircleAlert size={38} /><p className="eyebrow">Capture needs attention</p><h1 id="error-heading">This recap did not finish.</h1><p>{statusMessage}</p><div className="error-actions">{capturedAudio ? <button className="primary-button" type="button" onClick={() => void processAudio(capturedAudio, buildTranscriptSeed(eventDetails), sessionId ?? undefined)}><Upload size={16} />Try again</button> : null}<button className="secondary-button inverse-secondary" type="button" onClick={startNewRecap}>Start a new recap</button></div></div>
+          <div className="error-content"><CircleAlert size={38} /><p className="eyebrow">Capture needs attention</p><h1 id="error-heading">This recap did not finish.</h1><p>{statusMessage}</p><div className="error-actions">{capturedAudio ? <button className="primary-button" type="button" onClick={() => void processAudio(capturedAudio, undefined, sessionId ?? undefined)}><Upload size={16} />Try again</button> : null}<button className="secondary-button inverse-secondary" type="button" onClick={startNewRecap}>Start a new recap</button></div></div>
+          <div className="error-content"><CircleAlert size={38} /><p className="eyebrow">Capture needs attention</p><h1 id="error-heading">This recap did not finish.</h1><p>{statusMessage}</p><div className="error-actions">{capturedAudio ? <button className="primary-button" type="button" onClick={() => void processAudio(capturedAudio, undefined, sessionId ?? undefined)}><Upload size={16} />Try again</button> : null}<button className="secondary-button inverse-secondary" type="button" onClick={startNewRecap}>Start a new recap</button></div></div>
         </section>
       );
     }

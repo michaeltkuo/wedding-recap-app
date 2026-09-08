@@ -20,7 +20,7 @@ import {
 } from "../contracts.js";
 
 import { API_CONFIG } from "../config.js";
-import { buildFallbackGoogleDoc, canPublishToGoogleDocs, publishGoogleDoc } from "./google-docs.js";
+import { canPublishToGoogleDocs, publishGoogleDoc } from "./google-docs.js";
 import { MetricsRegistry } from "./metrics.js";
 import { transitionStage } from "./session-machine.js";
 import { sessionStore } from "./store.js";
@@ -34,6 +34,144 @@ function delay(ms: number) {
 function extractField(transcriptText: string, label: string) {
   const pattern = new RegExp(`${label}\\s*:\\s*([^\\n.]+)`, "i");
   return transcriptText.match(pattern)?.[1]?.trim();
+}
+
+function extensionForMimeType(mimeType: string) {
+  return (
+    {
+      "audio/webm": "webm",
+      "audio/mp4": "m4a",
+      "audio/mpeg": "mp3",
+      "audio/wav": "wav"
+    }[mimeType] ?? "audio"
+  );
+}
+
+type OpenAiMessage = {
+  role: "system" | "user";
+  content: string;
+};
+
+async function callOpenAi(endpoint: string, init: RequestInit) {
+  if (!API_CONFIG.openai.apiKey) {
+    throw new Error("OPENAI_API_KEY is missing");
+  }
+
+  const response = await fetch(`https://api.openai.com/v1/${endpoint}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${API_CONFIG.openai.apiKey}`,
+      ...(init.headers ?? {})
+    }
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`OpenAI ${endpoint} failed: ${response.status} ${errorBody}`);
+  }
+
+  return response;
+}
+
+async function transcribeAudioFromUpload(content: Buffer, mimeType: string) {
+  const audioBytes = Uint8Array.from(content);
+  const audioBlob = new Blob([audioBytes.buffer], { type: mimeType });
+  const form = new FormData();
+  form.set("model", API_CONFIG.openai.transcriptionModel);
+  form.set("response_format", "text");
+  form.set("file", audioBlob, `recap.${extensionForMimeType(mimeType)}`);
+
+  const response = await callOpenAi("audio/transcriptions", {
+    method: "POST",
+    body: form
+  });
+
+  const transcriptText = (await response.text()).trim();
+  if (!transcriptText) {
+    throw new Error("Transcription returned empty text");
+  }
+
+  return transcriptText;
+}
+
+async function extractRecapWithModel(transcriptText: string) {
+  const response = await callOpenAi("chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: API_CONFIG.openai.extractionModel,
+      temperature: 0,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "recap",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              couple_names: { type: "string" },
+              venue_name: { type: "string" },
+              venue_city_state: { type: "string" },
+              wedding_style: { type: "string" },
+              timeline_summary: { type: "string" },
+              signature_moments: {
+                type: "array",
+                items: { type: "string" },
+                minItems: 1
+              },
+              portrait_notes: { type: "string" },
+              weather_notes: { type: "string" },
+              vendor_notes: {
+                type: "array",
+                items: { type: "string" }
+              },
+              cultural_traditions: {
+                type: "array",
+                items: { type: "string" }
+              },
+              reception_highlights: {
+                type: "array",
+                items: { type: "string" }
+              }
+            },
+            required: [
+              "couple_names",
+              "venue_name",
+              "venue_city_state",
+              "wedding_style",
+              "timeline_summary",
+              "signature_moments",
+              "portrait_notes",
+              "weather_notes"
+            ]
+          }
+        }
+      },
+      messages: [
+        {
+          role: "system",
+          content: "Extract a wedding recap object from transcript text. Return only factual fields from the transcript."
+        } satisfies OpenAiMessage,
+        {
+          role: "user",
+          content: transcriptText
+        } satisfies OpenAiMessage
+      ]
+    })
+  });
+
+  const body = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = body.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("Extraction model returned no JSON content");
+  }
+
+  const parsed = JSON.parse(content);
+  return RecapSchema.parse(parsed);
 }
 
 function buildTranscript(sessionId: string, transcriptText: string): Transcript {
@@ -77,14 +215,14 @@ function buildRecap(transcriptText: string): Recap {
     couple_names: extractField(transcriptText, "couple") ?? "",
     venue_name: extractField(transcriptText, "venue") ?? "",
     venue_city_state: extractField(transcriptText, "city") ?? "",
-    wedding_style: extractField(transcriptText, "style") ?? "documentary romantic",
-    timeline_summary: extractField(transcriptText, "timeline") ?? "Ceremony, portraits, and celebration flowed smoothly.",
-    signature_moments: (extractField(transcriptText, "moments") ?? "private vows, packed dance floor")
+    wedding_style: extractField(transcriptText, "style") ?? "",
+    timeline_summary: extractField(transcriptText, "timeline") ?? "",
+    signature_moments: (extractField(transcriptText, "moments") ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean),
-    portrait_notes: extractField(transcriptText, "portraits") ?? "Portraits stayed relaxed and location-forward.",
-    weather_notes: extractField(transcriptText, "weather") ?? "Warm weather with soft evening light.",
+    portrait_notes: extractField(transcriptText, "portraits") ?? "",
+    weather_notes: extractField(transcriptText, "weather") ?? "",
     vendor_notes: (extractField(transcriptText, "vendors") ?? "")
       .split(",")
       .map((value) => value.trim())
@@ -148,9 +286,8 @@ function buildBlogOutput(recap: Recap): BlogOutput {
 }
 
 async function extractRecapWithRetry(sessionId: string, transcriptText: string, simulation?: PipelineStartRequest["simulate"]) {
-  const followUps = followUpPrompts(transcriptText);
-  if (simulation?.extractionMode === "missing_fields" || followUps.length > 0) {
-    return { followUps, recap: undefined, partial: false };
+  if (simulation?.extractionMode === "missing_fields") {
+    return { followUps: followUpPrompts(transcriptText), recap: undefined, partial: false };
   }
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -161,21 +298,19 @@ async function extractRecapWithRetry(sessionId: string, transcriptText: string, 
 
     if (failThisAttempt) {
       if (attempt === 2) {
-        return {
-          recap: undefined,
-          partial: true,
-          followUps: [
-            { field: "schema", prompt: "Extraction schema failed twice. Please review the highlighted gaps." }
-          ]
-        };
+        throw new Error("Extraction schema failed twice");
       }
       continue;
     }
 
-    return { recap: buildRecap(transcriptText), partial: false, followUps: [] };
+    if (simulation) {
+      return { recap: buildRecap(transcriptText), partial: false, followUps: [] };
+    }
+
+    return { recap: await extractRecapWithModel(transcriptText), partial: false, followUps: [] };
   }
 
-  return { recap: undefined, partial: true, followUps: [{ field: "schema", prompt: "Unknown extraction failure." }] };
+  throw new Error("Unknown extraction failure");
 }
 
 class InMemoryJobQueue {
@@ -268,13 +403,17 @@ export function runPipeline(request: PipelineStartRequest) {
   const parsed = PipelineStartRequestSchema.parse(request);
 
   const result = sessionStore.rememberIdempotent(parsed.idempotencyKey, () => {
+    let uploadContent: Buffer | undefined;
+    let uploadMimeType: string | undefined;
     const existing = sessionStore.getSession(parsed.sessionId);
     if (existing.stage !== "follow_up_required") {
       const upload = sessionStore.getUpload(parsed.uploadToken);
       if (upload.sessionId !== parsed.sessionId) {
         throw new Error("Upload does not belong to this session");
       }
-      sessionStore.consumeUpload(parsed.uploadToken);
+      const consumedUpload = sessionStore.consumeUpload(parsed.uploadToken);
+      uploadContent = consumedUpload.content;
+      uploadMimeType = consumedUpload.contentType;
     }
 
     const nextStage = ["uploaded", "follow_up_required", "error"].includes(existing.stage) ? "transcribing" : existing.stage;
@@ -282,41 +421,58 @@ export function runPipeline(request: PipelineStartRequest) {
     sessionStore.updateSession(parsed.sessionId, { simulation: parsed.simulate });
 
     return jobQueue.enqueue(parsed.idempotencyKey, async () => {
-      const transcriptionDelayMs = parsed.simulate?.transcriptionDelayMs ?? 25;
-      await delay(transcriptionDelayMs);
-      const transcript = buildTranscript(parsed.sessionId, parsed.transcriptText);
-      sessionStore.saveTranscript(parsed.sessionId, transcript, parsed.transcriptText);
-      sessionStore.updateSession(parsed.sessionId, {
-        metrics: {
-          ...sessionStore.getSession(parsed.sessionId).metrics,
-          transcriptionMs: transcriptionDelayMs
+      try {
+        const transcriptionStart = Date.now();
+        if (parsed.simulate?.transcriptionDelayMs) {
+          await delay(parsed.simulate.transcriptionDelayMs);
         }
-      });
-      metricsRegistry.record("transcriptionMs", transcriptionDelayMs);
 
-      sessionStore.updateStage(parsed.sessionId, transitionStage("transcribing", "extracting"), 50);
-      const extractionStart = Date.now();
-      const extractionResult = await extractRecapWithRetry(parsed.sessionId, parsed.transcriptText, parsed.simulate);
-      const extractionMs = Date.now() - extractionStart;
-      sessionStore.updateSession(parsed.sessionId, {
-        metrics: {
-          ...sessionStore.getSession(parsed.sessionId).metrics,
-          extractionMs
+        const transcriptText = parsed.simulate
+          ? parsed.transcriptText ?? ""
+          : await transcribeAudioFromUpload(uploadContent ?? Buffer.alloc(0), uploadMimeType ?? "application/octet-stream");
+
+        if (!transcriptText) {
+          throw new Error("Transcription returned no usable text");
         }
-      });
-      metricsRegistry.record("extractionMs", extractionMs);
 
-      if (extractionResult.followUps.length > 0 && !extractionResult.recap) {
-        const stage = extractionResult.partial ? "partial" : "follow_up_required";
-        sessionStore.setFollowUps(parsed.sessionId, extractionResult.followUps, extractionResult.partial);
-        sessionStore.updateStage(parsed.sessionId, transitionStage("extracting", stage), extractionResult.partial ? 85 : 70);
-        return;
+        const transcript = buildTranscript(parsed.sessionId, transcriptText);
+        sessionStore.saveTranscript(parsed.sessionId, transcript, transcriptText);
+
+        const transcriptionMs = Date.now() - transcriptionStart;
+        sessionStore.updateSession(parsed.sessionId, {
+          metrics: {
+            ...sessionStore.getSession(parsed.sessionId).metrics,
+            transcriptionMs
+          }
+        });
+        metricsRegistry.record("transcriptionMs", transcriptionMs);
+
+        sessionStore.updateStage(parsed.sessionId, transitionStage("transcribing", "extracting"), 50);
+        const extractionStart = Date.now();
+        const extractionResult = await extractRecapWithRetry(parsed.sessionId, transcriptText, parsed.simulate);
+        const extractionMs = Date.now() - extractionStart;
+        sessionStore.updateSession(parsed.sessionId, {
+          metrics: {
+            ...sessionStore.getSession(parsed.sessionId).metrics,
+            extractionMs
+          }
+        });
+        metricsRegistry.record("extractionMs", extractionMs);
+
+        if (extractionResult.followUps.length > 0 && !extractionResult.recap) {
+          sessionStore.setFollowUps(parsed.sessionId, extractionResult.followUps, false);
+          sessionStore.updateStage(parsed.sessionId, transitionStage("extracting", "follow_up_required"), 70);
+          return;
+        }
+
+        const recap = extractionResult.recap!;
+        sessionStore.saveRecap(parsed.sessionId, recap, []);
+        sessionStore.updateStage(parsed.sessionId, transitionStage("extracting", "review_ready"), 75);
+        SessionResultSchema.parse(sessionStore.getSession(parsed.sessionId));
+      } catch (pipelineError) {
+        const message = pipelineError instanceof Error ? pipelineError.message : "Pipeline failed";
+        sessionStore.updateStage(parsed.sessionId, transitionStage(sessionStore.getSession(parsed.sessionId).stage, "error"), 100, message);
       }
-
-      const recap = extractionResult.recap!;
-      sessionStore.saveRecap(parsed.sessionId, recap, []);
-      sessionStore.updateStage(parsed.sessionId, transitionStage("extracting", "review_ready"), 75);
-      SessionResultSchema.parse(sessionStore.getSession(parsed.sessionId));
     });
   });
 
@@ -378,23 +534,18 @@ export async function publishSession(sessionId: string, publishMode: "normal" | 
     throw new Error("Recap is not ready to send");
   }
 
-  if (publishMode === "failed") {
+  if (publishMode !== "normal") {
     sessionStore.updateStage(sessionId, transitionStage("publishing", "error"), 100, "Google Docs publish failed");
     throw new Error("Google Docs publish failed");
   }
 
   const publishStart = Date.now();
-  let googleDoc;
-  if (publishMode === "queued") {
-    googleDoc = buildFallbackGoogleDoc(sessionId, "queued");
-  } else if (canPublishToGoogleDocs()) {
-    googleDoc = await publishGoogleDoc(blogOutput);
-  } else if (API_CONFIG.google.clientId.length > 0 || API_CONFIG.google.clientSecret.length > 0) {
-    sessionStore.updateStage(sessionId, transitionStage("publishing", "error"), 100, "Google OAuth is not connected");
-    throw new Error("Google OAuth is not connected");
-  } else {
-    googleDoc = buildFallbackGoogleDoc(sessionId, "ready");
+  if (!canPublishToGoogleDocs()) {
+    sessionStore.updateStage(sessionId, transitionStage("publishing", "error"), 100, "Google Docs publishing is unavailable: connect Google OAuth first");
+    throw new Error("Google Docs publishing is unavailable: connect Google OAuth first");
   }
+
+  const googleDoc = await publishGoogleDoc(blogOutput);
 
   sessionStore.updateSession(sessionId, { googleDoc });
   const publishMs = Date.now() - publishStart;

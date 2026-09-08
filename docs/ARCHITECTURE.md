@@ -69,7 +69,7 @@ Frontend presents a simplified UX state model:
 ## Reliability and Guardrails
 
 - Signed upload constraints: MIME, size, TTL, and single-use token behavior.
-- Extraction retry policy: one automatic retry before partial fallback.
+- Extraction retry policy: one automatic retry; if extraction still fails, the session moves to `error` with notes.
 - Follow-up prompts generated when required recap fields are missing.
 - Idempotency map prevents duplicate pipeline execution per idempotency key.
 
@@ -83,6 +83,6 @@ Frontend presents a simplified UX state model:
 
 ## Current Gaps
 
-- Pipeline provider integrations are simulated rather than wired to production services.
+- Pipeline requires external providers and fails fast when provider credentials are missing.
 - In-memory store and queue are process-local; received audio bytes are retained only for the process lifetime.
-- Publish flow returns stub Google Doc metadata until Google OAuth is configured.
+- Publish flow requires active Google OAuth connectivity.
