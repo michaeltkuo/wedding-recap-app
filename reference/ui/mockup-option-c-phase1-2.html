@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Option C - Phase 1 and 2 UX Review</title>
+    <link rel="stylesheet" href="./mockup-option-c.css" />
+    <style>
+      .c-badge {
+        display: inline-block;
+        border: 1px solid var(--c-line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: var(--c-muted);
+        font-family: var(--c-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .c-setup-empty h2 {
+        max-width: 560px;
+      }
+
+      .c-setup-empty .c-session-meta {
+        color: #98a2ad;
+      }
+
+      .c-setup-empty .c-session-meta strong {
+        color: #c8d0d8;
+      }
+
+      .c-ghost-note {
+        margin-top: 8px;
+        color: var(--c-inverse-muted);
+        font-size: 12px;
+      }
+
+      .c-coverage-row.is-actionable {
+        cursor: pointer;
+      }
+
+      .c-coverage-row.is-actionable:hover {
+        background: #f7f9fb;
+      }
+
+      .c-action-pill {
+        justify-self: end;
+        border: 1px solid #e8b5b1;
+        border-radius: 999px;
+        color: #b43f37;
+        font-family: var(--c-mono);
+        font-size: 10px;
+        font-weight: 700;
+        padding: 5px 8px;
+        text-transform: uppercase;
+      }
+
+      .c-gap-editor {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 10px;
+        align-items: center;
+        border-bottom: 1px solid var(--c-soft);
+        background: #fff6f5;
+        padding: 12px 10px 12px 46px;
+      }
+
+      .c-gap-editor input {
+        min-width: 0;
+        border: 1px solid #d8dde3;
+        border-radius: 6px;
+        font-size: 13px;
+        padding: 8px 10px;
+      }
+
+      .c-transcript-drawer {
+        position: absolute;
+        top: 68px;
+        right: 18px;
+        width: min(92%, 370px);
+        border: 1px solid var(--c-line);
+        border-radius: 10px;
+        background: #ffffff;
+        box-shadow: 0 24px 56px rgba(15, 24, 34, 0.2);
+        padding: 14px;
+      }
+
+      .c-transcript-drawer h3 {
+        margin: 0;
+        color: var(--c-text);
+        font-size: 16px;
+      }
+
+      .c-transcript-drawer p {
+        margin: 8px 0 0;
+        color: var(--c-muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .c-transcript-drawer ul {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .c-transcript-drawer li {
+        border: 1px solid var(--c-soft);
+        border-radius: 8px;
+        background: #fbfcfe;
+        color: #4a5561;
+        font-size: 12px;
+        line-height: 1.4;
+        padding: 9px 10px;
+      }
+
+      .c-transcript-empty {
+        margin-top: 12px;
+        border: 1px dashed #d7dee5;
+        border-radius: 8px;
+        background: #fbfdff;
+        color: #5e6873;
+        font-size: 12px;
+        padding: 11px 12px;
+      }
+
+      .c-phone-overlay {
+        margin: 8px 14px 0;
+        border: 1px solid var(--c-line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--c-text);
+        padding: 10px;
+      }
+
+      .c-phone-overlay h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .c-phone-overlay p {
+        margin: 6px 0 0;
+        color: var(--c-muted);
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="c-prototype">
+      <header class="c-concept-head">
+        <div>
+          <p class="c-overline">Option C / Phase 1 and 2</p>
+          <h1>UX review harness for empty start, transcript behavior, and actionable coverage gaps.</h1>
+          <p class="c-concept-copy">This prototype is derived from Option C and focuses only on Epic 13 Phase 1 and 2 decisions.</p>
+        </div>
+        <nav class="c-links" aria-label="Mockup options">
+          <a href="./mockup-option-c.html">Option C baseline</a>
+          <a class="current" href="./mockup-option-c-phase1-2.html" aria-current="page">Phase 1 and 2 artifact</a>
+          <a href="./style-guide.html">Prior design system</a>
+        </nav>
+      </header>
+
+      <div class="c-review-nav">
+        <p class="c-overline">Walk the decisions to approve</p>
+        <div id="state-switcher" class="c-state-switcher" aria-label="Preview state"></div>
+      </div>
+
+      <section class="c-stage-grid" aria-label="Desktop and mobile mockups">
+        <div class="c-preview">
+          <div class="c-preview-label"><span>Desktop application</span><span id="desktop-state-label"></span></div>
+          <div id="desktop-stage" class="c-desktop-frame"></div>
+        </div>
+        <div class="c-preview">
+          <div class="c-preview-label"><span>Mobile application</span><span id="mobile-state-label"></span></div>
+          <div class="c-phone-frame">
+            <div class="c-phone-speaker"></div>
+            <div id="mobile-stage"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
+    <script>
+      const wave = (count = 25) => {
+        const heights = [28, 44, 62, 38, 74, 105, 68, 126, 84, 48, 92, 150, 96, 62, 132, 78, 42, 112, 66, 96, 54, 82, 38, 58, 30];
+        return Array.from({ length: count }, (_, index) => {
+          const height = heights[index % heights.length];
+          return `<i style="--h:${height}px;--d:${(index % 6) * 90}ms"></i>`;
+        }).join("");
+      };
+
+      const desktopShell = (content, mode = "dark", section = "capture") => `
+        <div class="c-desktop-app ${mode}">
+          <div class="c-desktop-shell">
+            <aside class="c-rail">
+              <div class="c-rail-brand"><span class="c-brand-glyph">R</span><span>RECAP / STUDIO</span></div>
+              <nav class="c-rail-nav" aria-label="Application">
+                <button type="button" class="${section === "capture" ? "active" : ""}"><i data-lucide="mic-2"></i>Capture</button>
+                <button type="button" class="${section === "library" ? "active" : ""}"><i data-lucide="library"></i>Library</button>
+                <button type="button"><i data-lucide="circle-help"></i>Help</button>
+              </nav>
+              <div class="c-rail-bottom">
+                <p class="c-overline">Delivery desk</p>
+                <p>michael@authormadephoto.com</p>
+              </div>
+            </aside>
+            <section class="c-desk-main">${content}</section>
+          </div>
+        </div>
+      `;
+
+      const mobileNav = (section = "capture") => `
+        <nav class="c-mobile-nav" aria-label="Application">
+          <button type="button" class="${section === "capture" ? "active" : ""}"><i data-lucide="mic-2"></i><span>CAPTURE</span></button>
+          <button type="button" class="${section === "library" ? "active" : ""}"><i data-lucide="library"></i><span>LIBRARY</span></button>
+          <button type="button"><i data-lucide="circle-help"></i><span>HELP</span></button>
+        </nav>
+      `;
+
+      const mobileShell = (content, mode = "dark") => `
+        <div class="c-phone-app ${mode}">
+          ${content}
+        </div>
+      `;
+
+      const steps = [
+        {
+          name: "Ready Empty",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar">
+              <div class="c-desk-location"><span class="rec-dot"></span>New field note</div>
+              <button class="c-icon-button" type="button" aria-label="Session settings"><i data-lucide="settings-2"></i></button>
+            </header>
+            <div class="c-setup-main c-setup-empty">
+              <section class="c-setup-intro">
+                <p class="c-overline">No session metadata yet</p>
+                <h2>Start a new recap</h2>
+                <p class="c-session-meta"><strong>No client selected yet</strong><br />Names and venue can be added now or inferred from recording.</p>
+                <div class="c-rule"></div>
+                <p class="c-setup-copy">Talk through the day in your own order. The first good pass is usually enough to create editorial handoff.</p>
+              </section>
+              <section class="c-setup-launch">
+                <span class="c-badge">Phase 1 decision</span>
+                <button class="c-record-launch" type="button">
+                  <span><i data-lucide="mic"></i>New tape<strong>Record recap</strong></span>
+                </button>
+                <p class="c-launch-caption">One tap to start. 4-7 minutes is usually enough.</p>
+                <button class="c-import-button" type="button">Import audio</button>
+              </section>
+            </div>
+            <footer class="c-bottom-strip"><i data-lucide="send"></i><span>Finished recaps are delivered to <strong>Michael's editorial desk</strong>.</span></footer>
+          `),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:40</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><span class="c-mobile-wordmark">REC / STUDIO</span><button class="c-mobile-icon" type="button"><i data-lucide="settings-2"></i></button></header>
+            <section class="c-mobile-setup">
+              <p class="c-overline">No session metadata yet</p>
+              <h2 class="c-mobile-event">Start a new recap</h2>
+              <p class="c-mobile-event-meta">No client selected yet</p>
+              <p class="c-mobile-guide">Record first, then review coverage before sending. Add names and venue now only if you have them.</p>
+              <div class="c-mobile-launch-wrap">
+                <button class="c-mobile-launch" type="button"><span><i data-lucide="mic"></i><strong>Record</strong><span>New tape</span></span></button>
+              </div>
+              <p class="c-mobile-footer-note"><i data-lucide="send"></i>Delivered to Michael when you are done.</p>
+            </section>
+            ${mobileNav("capture")}
+          `)
+        },
+        {
+          name: "Ready Named",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar">
+              <div class="c-desk-location"><span class="rec-dot"></span>New field note</div>
+              <button class="c-icon-button" type="button"><i data-lucide="settings-2"></i></button>
+            </header>
+            <div class="c-setup-main">
+              <section class="c-setup-intro">
+                <p class="c-overline">Saturday / Sep 7</p>
+                <h2>Nora + Ben</h2>
+                <p class="c-session-meta"><strong>Plaza Venezia</strong><br />Orlando, FL</p>
+                <div class="c-rule"></div>
+                <p class="c-setup-copy">Tell the day in your own order. When you stop, we will shape the raw recap into an editorial handoff.</p>
+              </section>
+              <section class="c-setup-launch">
+                <button class="c-record-launch" type="button">
+                  <span><i data-lucide="mic"></i>New tape<strong>Record recap</strong></span>
+                </button>
+                <p class="c-launch-caption">Optional metadata is now visible because user provided it.</p>
+                <button class="c-import-button" type="button">Import audio</button>
+              </section>
+            </div>
+            <footer class="c-bottom-strip"><i data-lucide="send"></i><span>Finished recaps are delivered to <strong>Michael's editorial desk</strong>.</span></footer>
+          `),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:42</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><span class="c-mobile-wordmark">REC / STUDIO</span><button class="c-mobile-icon" type="button"><i data-lucide="settings-2"></i></button></header>
+            <section class="c-mobile-setup">
+              <p class="c-overline">Saturday / Sep 7</p>
+              <h2 class="c-mobile-event">Nora<br />+ Ben</h2>
+              <p class="c-mobile-event-meta">Plaza Venezia<br />Orlando, FL</p>
+              <p class="c-mobile-guide">Metadata is optional. Recording remains the dominant action.</p>
+              <div class="c-mobile-launch-wrap">
+                <button class="c-mobile-launch" type="button"><span><i data-lucide="mic"></i><strong>Record</strong><span>New tape</span></span></button>
+              </div>
+              <p class="c-mobile-footer-note"><i data-lucide="send"></i>Delivered to Michael when you are done.</p>
+            </section>
+            ${mobileNav("capture")}
+          `)
+        },
+        {
+          name: "Review Baseline",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Nora + Ben / Review</div><button class="c-icon-button" type="button" aria-label="Open transcript"><i data-lucide="file-text"></i></button></header>
+            <section class="c-review-main" style="position:relative;">
+              <div class="c-review-heading"><div><p class="c-overline">Coverage map</p><h2>The story is taking shape.</h2><p>Open means no usable detail was found yet. Open rows are now actionable.</p></div><span class="c-score">4 / 5 FOUND</span></div>
+              <div class="c-coverage-list">
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Setting</strong><p>Plaza Venezia, Orlando, Florida</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Ceremony</strong><p>Private vows, garden aisle, candlelight</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Portraits</strong><p>Soft lakeside portraits after sunset</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Reception</strong><p>Heartfelt toasts and packed dance floor</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row is-actionable"><span class="c-coverage-icon gap"><i data-lucide="plus"></i></span><strong>Weather</strong><p>No usable detail found</p><span class="c-action-pill">Tap to add detail</span></div>
+              </div>
+              <div class="c-review-actions"><button class="c-secondary-action" type="button"><i data-lucide="file-text"></i>Read transcript</button><button class="c-primary-action" type="button"><i data-lucide="send"></i>Send recap</button></div>
+            </section>
+          `, "light"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:47</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><button class="c-mobile-icon" type="button"><i data-lucide="arrow-left"></i></button><span class="c-mobile-wordmark">REVIEW</span><button class="c-mobile-icon" type="button"><i data-lucide="file-text"></i></button></header>
+            <section class="c-phone-review">
+              <p class="c-overline">Coverage map / 4 of 5</p><h2>The story is there.</h2><p>Open rows are tappable and can be fixed inline.</p>
+              <div class="c-phone-coverage">
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Setting</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Ceremony</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Portraits</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Reception</strong><span class="c-coverage-status">Found</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon gap"><i data-lucide="plus"></i></span><strong>Weather</strong><span class="c-action-pill">Open</span></div>
+              </div>
+              <div class="c-phone-bottom-actions"><button class="c-secondary-action" type="button">Read transcript</button><button class="c-primary-action" type="button">Send recap</button></div>
+            </section>
+            ${mobileNav("capture")}
+          `, "light")
+        },
+        {
+          name: "Transcript Open",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Nora + Ben / Review</div><button class="c-icon-button" type="button" aria-label="Close transcript"><i data-lucide="x"></i></button></header>
+            <section class="c-review-main" style="position:relative;">
+              <div class="c-review-heading"><div><p class="c-overline">Coverage map</p><h2>The story is taking shape.</h2><p>Transcript is opened from both the top icon and Read transcript button.</p></div><span class="c-score">4 / 5 FOUND</span></div>
+              <div class="c-coverage-list">
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Setting</strong><p>Plaza Venezia, Orlando, Florida</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon gap"><i data-lucide="plus"></i></span><strong>Weather</strong><p>No usable detail found</p><span class="c-action-pill">Tap to add detail</span></div>
+              </div>
+              <div class="c-transcript-drawer" role="dialog" aria-modal="true" aria-label="Transcript preview">
+                <h3>Transcript preview</h3>
+                <p>Shared entry point from transcript icon and Read transcript action.</p>
+                <ul>
+                  <li>We arrived around 2 PM and started portraits near the courtyard oak.</li>
+                  <li>Ceremony began at 3 PM with private vows before family entered.</li>
+                  <li>Reception opened with toasts and then everyone rushed to the dance floor.</li>
+                </ul>
+              </div>
+              <div class="c-review-actions"><button class="c-secondary-action" type="button"><i data-lucide="file-text"></i>Read transcript</button><button class="c-primary-action" type="button"><i data-lucide="send"></i>Send recap</button></div>
+            </section>
+          `, "light"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:49</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><button class="c-mobile-icon" type="button"><i data-lucide="arrow-left"></i></button><span class="c-mobile-wordmark">REVIEW</span><button class="c-mobile-icon" type="button"><i data-lucide="x"></i></button></header>
+            <section class="c-phone-review">
+              <p class="c-overline">Coverage map / 4 of 5</p><h2>Transcript preview open.</h2><p>Can be dismissed and does not block sending.</p>
+              <div class="c-phone-overlay" role="dialog" aria-modal="true" aria-label="Transcript preview">
+                <h3>Transcript preview</h3>
+                <p>Arrived around 2 PM. Ceremony around 3 PM. Portraits by courtyard trees.</p>
+              </div>
+              <div class="c-phone-bottom-actions"><button class="c-secondary-action" type="button">Close transcript</button><button class="c-primary-action" type="button">Send recap</button></div>
+            </section>
+            ${mobileNav("capture")}
+          `, "light")
+        },
+        {
+          name: "Transcript Unavailable",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Nora + Ben / Review</div><button class="c-icon-button" type="button"><i data-lucide="x"></i></button></header>
+            <section class="c-review-main" style="position:relative;">
+              <div class="c-review-heading"><div><p class="c-overline">Coverage map</p><h2>The story is taking shape.</h2><p>Unavailable transcript is explicit and not a dead end.</p></div><span class="c-score">IN REVIEW</span></div>
+              <div class="c-transcript-drawer" role="dialog" aria-modal="true" aria-label="Transcript preview unavailable">
+                <h3>Transcript preview</h3>
+                <p>Transcript helps verify details before sending.</p>
+                <div class="c-transcript-empty">Transcript is not available yet for this session. You can still resolve open items and send recap.</div>
+              </div>
+              <div class="c-review-actions"><button class="c-secondary-action" type="button"><i data-lucide="file-text"></i>Read transcript</button><button class="c-primary-action" type="button"><i data-lucide="send"></i>Send recap</button></div>
+            </section>
+          `, "light"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:50</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><button class="c-mobile-icon" type="button"><i data-lucide="arrow-left"></i></button><span class="c-mobile-wordmark">REVIEW</span><button class="c-mobile-icon" type="button"><i data-lucide="x"></i></button></header>
+            <section class="c-phone-review">
+              <p class="c-overline">Coverage map</p><h2>Transcript unavailable.</h2><p>No dead CTA: users can continue and send.</p>
+              <div class="c-phone-overlay"><h3>Transcript preview</h3><p>Transcript is not available yet for this session.</p></div>
+              <div class="c-phone-bottom-actions"><button class="c-secondary-action" type="button">Close</button><button class="c-primary-action" type="button">Send recap</button></div>
+            </section>
+            ${mobileNav("capture")}
+          `, "light")
+        },
+        {
+          name: "Open Row Action",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Nora + Ben / Review</div><button class="c-icon-button" type="button"><i data-lucide="file-text"></i></button></header>
+            <section class="c-review-main">
+              <div class="c-review-heading"><div><p class="c-overline">Coverage map</p><h2>Resolve missing detail inline.</h2><p>Phase 2 behavior: Open row expands editor without leaving review.</p></div><span class="c-score">4 / 5 FOUND</span></div>
+              <div class="c-coverage-list">
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Setting</strong><p>Plaza Venezia, Orlando, Florida</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row is-actionable"><span class="c-coverage-icon gap"><i data-lucide="plus"></i></span><strong>Weather</strong><p>No usable detail found</p><span class="c-action-pill">Open</span></div>
+                <div class="c-gap-editor">
+                  <input value="Hot and sunny with harsh mid-day light, then clear evening breeze." aria-label="Weather detail" />
+                  <button class="c-secondary-action" type="button">Cancel</button>
+                  <button class="c-primary-action" type="button">Save detail</button>
+                </div>
+              </div>
+              <p class="c-ghost-note">Save detail updates row to Captured and includes this note in handoff context.</p>
+              <div class="c-review-actions"><button class="c-secondary-action" type="button"><i data-lucide="file-text"></i>Read transcript</button><button class="c-primary-action" type="button"><i data-lucide="send"></i>Send recap</button></div>
+            </section>
+          `, "light"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:53</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><button class="c-mobile-icon" type="button"><i data-lucide="arrow-left"></i></button><span class="c-mobile-wordmark">REVIEW</span><button class="c-mobile-icon" type="button"><i data-lucide="file-text"></i></button></header>
+            <section class="c-phone-review">
+              <p class="c-overline">Coverage map / Open weather</p><h2>Add missing weather detail.</h2>
+              <div class="c-phone-overlay"><h3>Weather detail</h3><p>Hot and sunny with harsh mid-day light, then clear evening breeze.</p></div>
+              <div class="c-phone-bottom-actions"><button class="c-secondary-action" type="button">Cancel</button><button class="c-primary-action" type="button">Save detail</button></div>
+            </section>
+            ${mobileNav("capture")}
+          `, "light")
+        },
+        {
+          name: "Gap Resolved",
+          desktop: desktopShell(`
+            <header class="c-desk-topbar"><div class="c-desk-location">Nora + Ben / Review</div><button class="c-icon-button" type="button"><i data-lucide="file-text"></i></button></header>
+            <section class="c-review-main">
+              <div class="c-review-heading"><div><p class="c-overline">Coverage map</p><h2>Ready for send.</h2><p>Weather gap is now captured through inline action.</p></div><span class="c-score">5 / 5 FOUND</span></div>
+              <div class="c-coverage-list">
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Setting</strong><p>Plaza Venezia, Orlando, Florida</p><span class="c-coverage-status">Captured</span></div>
+                <div class="c-coverage-row"><span class="c-coverage-icon"><i data-lucide="check"></i></span><strong>Weather</strong><p>Hot and sunny with harsh mid-day light, then clear evening breeze.</p><span class="c-coverage-status">Captured</span></div>
+              </div>
+              <div class="c-review-actions"><button class="c-secondary-action" type="button"><i data-lucide="file-text"></i>Read transcript</button><button class="c-primary-action" type="button"><i data-lucide="send"></i>Send recap</button></div>
+            </section>
+          `, "light"),
+          mobile: mobileShell(`
+            <div class="c-mobile-status"><span>11:55</span><span>LTE 95%</span></div>
+            <header class="c-mobile-topbar"><button class="c-mobile-icon" type="button"><i data-lucide="arrow-left"></i></button><span class="c-mobile-wordmark">REVIEW</span><button class="c-mobile-icon" type="button"><i data-lucide="file-text"></i></button></header>
+            <section class="c-phone-review">
+              <p class="c-overline">Coverage map / 5 of 5</p><h2>All key details captured.</h2><p>Ready to send with no open gaps.</p>
+              <div class="c-phone-bottom-actions"><button class="c-secondary-action" type="button">Read transcript</button><button class="c-primary-action" type="button">Send recap</button></div>
+            </section>
+            ${mobileNav("capture")}
+          `, "light")
+        }
+      ];
+
+      let currentStep = 0;
+      const stateSwitcher = document.getElementById("state-switcher");
+      const desktopStage = document.getElementById("desktop-stage");
+      const mobileStage = document.getElementById("mobile-stage");
+      const desktopLabel = document.getElementById("desktop-state-label");
+      const mobileLabel = document.getElementById("mobile-state-label");
+
+      function renderIcons() {
+        if (window.lucide) {
+          window.lucide.createIcons({ attrs: { "stroke-width": 1.8 } });
+        }
+      }
+
+      function renderSwitcher() {
+        stateSwitcher.innerHTML = steps
+          .map(
+            (step, index) =>
+              `<button type="button" class="${currentStep === index ? "active" : ""}" data-step="${index}" aria-pressed="${currentStep === index}">${index + 1}. ${step.name}</button>`
+          )
+          .join("");
+      }
+
+      function renderStep() {
+        const step = steps[currentStep];
+        desktopStage.innerHTML = step.desktop;
+        mobileStage.innerHTML = step.mobile;
+        desktopLabel.textContent = `${currentStep + 1} / ${step.name}`;
+        mobileLabel.textContent = step.name;
+        renderSwitcher();
+        renderIcons();
+      }
+
+      document.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-step]");
+        if (!trigger) return;
+        const nextStep = Number(trigger.dataset.step);
+        if (Number.isInteger(nextStep) && steps[nextStep]) {
+          currentStep = nextStep;
+          renderStep();
+        }
+      });
+
+      renderStep();
+    </script>
+  </body>
+</html>
