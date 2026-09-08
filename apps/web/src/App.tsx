@@ -65,7 +65,8 @@ const storyCues = [
 const followUpTranscriptLabels: Record<string, string> = {
   couple_names: "couple",
   venue_name: "venue",
-  venue_city_state: "city"
+  venue_city_state: "city",
+  weather_notes: "weather"
 };
 
 const waveHeights = [24, 44, 66, 34, 78, 108, 58, 128, 84, 42, 92, 146, 72, 54, 120, 76, 38, 108, 66, 88, 48, 74, 34, 58, 28];

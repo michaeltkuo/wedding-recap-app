@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ZodError } from "zod";
 
 import {
   BlogOutputSchema,
@@ -210,6 +211,31 @@ function followUpPrompts(transcriptText: string): FollowUp[] {
   return prompts;
 }
 
+function followUpPromptsFromValidationError(error: unknown): FollowUp[] {
+  if (!(error instanceof ZodError)) {
+    return [];
+  }
+
+  const promptByField: Record<string, string> = {
+    couple_names: "Who are the couple names for this wedding recap?",
+    venue_name: "What was the wedding venue?",
+    venue_city_state: "Which city and state should be used in the post?",
+    wedding_style: "How would you describe the wedding style in a short phrase?",
+    timeline_summary: "Can you summarize the wedding timeline in one or two sentences?",
+    signature_moments: "What were one or two signature moments from the day?",
+    portrait_notes: "What portrait notes should the editorial team keep?",
+    weather_notes: "What weather or lighting notes should be included?"
+  };
+
+  const missingFields = new Set(
+    error.issues
+      .map((issue) => issue.path[0])
+      .filter((field): field is string => typeof field === "string" && field in promptByField)
+  );
+
+  return [...missingFields].map((field) => ({ field, prompt: promptByField[field] }));
+}
+
 function buildRecap(transcriptText: string): Recap {
   return RecapSchema.parse({
     couple_names: extractField(transcriptText, "couple") ?? "",
@@ -303,11 +329,19 @@ async function extractRecapWithRetry(sessionId: string, transcriptText: string, 
       continue;
     }
 
-    if (simulation) {
-      return { recap: buildRecap(transcriptText), partial: false, followUps: [] };
-    }
+    try {
+      if (simulation) {
+        return { recap: buildRecap(transcriptText), partial: false, followUps: [] };
+      }
 
-    return { recap: await extractRecapWithModel(transcriptText), partial: false, followUps: [] };
+      return { recap: await extractRecapWithModel(transcriptText), partial: false, followUps: [] };
+    } catch (error) {
+      const followUps = followUpPromptsFromValidationError(error);
+      if (followUps.length > 0) {
+        return { recap: undefined, partial: false, followUps };
+      }
+      throw error;
+    }
   }
 
   throw new Error("Unknown extraction failure");
@@ -427,9 +461,18 @@ export function runPipeline(request: PipelineStartRequest) {
           await delay(parsed.simulate.transcriptionDelayMs);
         }
 
-        const transcriptText = parsed.simulate
+        let transcriptText = parsed.simulate
           ? parsed.transcriptText ?? ""
           : await transcribeAudioFromUpload(uploadContent ?? Buffer.alloc(0), uploadMimeType ?? "application/octet-stream");
+
+        const supplementalTranscript = parsed.transcriptText?.trim();
+        if (supplementalTranscript && !parsed.simulate) {
+          transcriptText = `${transcriptText}\n${supplementalTranscript}`;
+        }
+
+        if (supplementalTranscript && parsed.simulate && existing.stage === "follow_up_required" && existing.transcriptText) {
+          transcriptText = `${existing.transcriptText}\n${supplementalTranscript}`;
+        }
 
         if (!transcriptText) {
           throw new Error("Transcription returned no usable text");

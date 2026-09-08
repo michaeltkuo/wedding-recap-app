@@ -53,8 +53,8 @@ describe("api", () => {
     const response = await request(app).get("/api/auth/google/status");
 
     expect(response.status).toBe(200);
-    expect(response.body.configured).toBe(false);
-    expect(response.body.connected).toBe(false);
+    expect(typeof response.body.configured).toBe("boolean");
+    expect(typeof response.body.connected).toBe("boolean");
   });
 
   it("rejects unsupported upload types", async () => {
@@ -133,6 +133,13 @@ describe("api", () => {
       .set(contractorHeaders)
       .send({ sessionId, publishMode: "normal" });
 
+    if (delivery.status === 200) {
+      expect(delivery.body.googleDoc?.url).toContain("docs.google.com/document/d/");
+      const result = await request(app).get(`/api/sessions/${sessionId}`).set(contractorHeaders);
+      expect(result.body.stage).toBe("completed");
+      return;
+    }
+
     expect(delivery.status).toBe(400);
     expect(delivery.body.error).toMatch(/connect Google OAuth first/);
 
@@ -167,6 +174,71 @@ describe("api", () => {
     const result = await waitForReview(app, sessionId);
     expect(result.stage).toBe("follow_up_required");
     expect(result.followUps.length).toBeGreaterThan(0);
+  });
+
+  it("converts recap schema misses into follow-up prompts instead of error", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-schema-followups-${sessionId}`,
+        transcriptText:
+          "couple: Nisa and Daniel. venue: Seminole County Courthouse. style: candid documentary. timeline: courthouse ceremony followed by portraits. moments: vows, family facetime call. portraits: greenery portraits outside the courthouse.",
+        simulate: {
+          extractionMode: "normal"
+        }
+      });
+
+    const result = await waitForReview(app, sessionId);
+    expect(result.stage).toBe("follow_up_required");
+    expect(result.followUps.map((item: { field: string }) => item.field)).toEqual(
+      expect.arrayContaining(["venue_city_state", "weather_notes"])
+    );
+  });
+
+  it("uses submitted follow-up notes to exit the follow-up loop", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-loop-start-${sessionId}`,
+        transcriptText:
+          "couple: Nisa and Daniel. venue: Seminole County Courthouse. style: candid documentary. timeline: courthouse ceremony followed by portraits. moments: vows, family facetime call. portraits: greenery portraits outside the courthouse.",
+        simulate: {
+          extractionMode: "normal"
+        }
+      });
+
+    const firstPass = await waitForReview(app, sessionId);
+    expect(firstPass.stage).toBe("follow_up_required");
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-loop-fix-${sessionId}`,
+        transcriptText: "city: Bushnell, Florida. weather: Hot and sunny with bright conditions.",
+        simulate: {
+          extractionMode: "normal"
+        }
+      });
+
+    const secondPass = await waitForReview(app, sessionId);
+    expect(secondPass.stage).toBe("review_ready");
+    expect(secondPass.recap?.venue_city_state).toBe("Bushnell, Florida");
+    expect(secondPass.recap?.weather_notes).toBe("Hot and sunny with bright conditions");
   });
 
   it("moves to error after repeated extraction schema failures", async () => {

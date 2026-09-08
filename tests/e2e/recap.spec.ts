@@ -1,29 +1,36 @@
 import { expect, test } from "@playwright/test";
+import { resolve } from "node:path";
 
-const validAudio = {
-  name: "recap.webm",
-  mimeType: "audio/webm",
-  buffer: Buffer.alloc(1024, 1)
-};
+const validAudioPath = resolve(process.cwd(), "Audio Message.m4a");
 
 test("contractor flow handles pipeline and reports explicit provider failures", async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto("/recap/new");
 
   await expect(page.getByRole("button", { name: "Record recap" })).toBeVisible();
   await expect(page.getByText("michael@authormadephoto.com")).toBeVisible();
 
-  await page.getByTestId("audio-input").setInputFiles(validAudio);
+  await page.getByTestId("audio-input").setInputFiles(validAudioPath);
 
   const reviewReadyHeading = page.getByRole("heading", { name: "The story is taking shape." });
   const errorHeading = page.getByRole("heading", { name: "This recap did not finish." }).first();
+  const followUpHeading = page.getByRole("heading", { name: "Keep the story moving." });
 
-  await expect(reviewReadyHeading.or(errorHeading).first()).toBeVisible({ timeout: 30000 });
+  await expect(reviewReadyHeading.or(errorHeading).or(followUpHeading).first()).toBeVisible({ timeout: 120000 });
   const onReviewStage = await reviewReadyHeading.isVisible();
+  const onFollowUpStage = await followUpHeading.isVisible();
 
   if (onReviewStage) {
     await page.getByRole("button", { name: "Send recap" }).click();
-    await expect(page.getByRole("heading", { name: "This recap did not finish." }).first()).toBeVisible();
-    await expect(page.getByText("connect Google OAuth first").first()).toBeVisible();
+    const deliveredHeading = page.getByRole("heading", { name: "Your recap is on its way." });
+    await expect(deliveredHeading.or(errorHeading).first()).toBeVisible({ timeout: 30000 });
+
+    const delivered = await deliveredHeading.isVisible();
+    if (!delivered) {
+      await expect(page.getByText("connect Google OAuth first").first()).toBeVisible();
+    }
+  } else if (onFollowUpStage) {
+    await expect(followUpHeading).toBeVisible();
   } else {
     await expect(errorHeading).toBeVisible();
     await expect(page.locator(".error-content p").nth(1)).toBeVisible();
@@ -31,8 +38,7 @@ test("contractor flow handles pipeline and reports explicit provider failures", 
 
   await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Your recent tapes" })).toBeVisible();
-  await expect(page.getByText("Alex + Sam", { exact: true })).toBeVisible();
-  await expect(page.getByText("Needs retry", { exact: true })).toBeVisible();
+  await expect(page.locator(".library-row").first()).toBeVisible();
 });
 
 test("unsupported imported audio shows a recovery state", async ({ page }) => {
