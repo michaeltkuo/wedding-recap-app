@@ -66,13 +66,19 @@ npm --workspace @wedding/api run build
 npm --workspace @wedding/api run test
 ```
 
-Google Docs publishing via OAuth requires these env vars when you want real Google Docs output instead of the local fallback URL:
+Google Docs publishing via OAuth requires these env vars:
 
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
 - `GOOGLE_OAUTH_REDIRECT_URI` (defaults to `http://127.0.0.1:8787/api/auth/google/callback`)
 - `GOOGLE_DOC_FOLDER_ID` (optional)
 - `WEB_ORIGIN` (defaults to `http://127.0.0.1:4173`)
+
+Transcription and recap extraction require:
+
+- `OPENAI_API_KEY`
+- `OPENAI_TRANSCRIPTION_MODEL` (optional, defaults to `gpt-4o-mini-transcribe`)
+- `OPENAI_EXTRACTION_MODEL` (optional, defaults to `gpt-4.1-mini`)
 
 Web package:
 

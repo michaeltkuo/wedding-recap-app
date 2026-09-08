@@ -61,10 +61,25 @@ Success `201`:
 {
   "uploadToken": "...",
   "objectKey": "sessions/.../recap.webm",
-  "uploadUrl": "https://storage.local/upload/...",
+  "uploadUrl": "http://127.0.0.1:8787/api/uploads/...",
   "expiresAt": "2026-08-07T00:00:00.000Z",
   "ttlSeconds": 900,
   "singleUse": true
+}
+```
+
+### PUT /api/uploads/:uploadToken
+
+Uploads the raw audio bytes associated with a signed upload. Send the contractor
+token and a matching `Content-Type` header. The byte length and MIME type must
+match the signed policy.
+
+Success `201`:
+
+```json
+{
+  "accepted": true,
+  "sessionId": "..."
 }
 ```
 
@@ -72,7 +87,9 @@ Success `201`:
 
 ### POST /api/transcriptions
 
-Starts async processing.
+Starts async transcription and recap extraction after audio has been received.
+Successful extraction stops at `review_ready`; it does not create or deliver a
+draft until the contractor explicitly sends the recap.
 
 Request:
 
@@ -141,6 +158,10 @@ Request:
 
 Success returns Google Doc metadata.
 
+The session must be at `review_ready` (or have a previously generated draft).
+The endpoint builds the draft when necessary, then publishes it and marks the
+session as `completed`.
+
 ## Google OAuth Status
 
 ### GET /api/auth/google/status
@@ -158,6 +179,8 @@ Returns full session result payload including:
 - follow-up prompts
 - googleDoc metadata
 - timing metrics
+
+Successful processing reaches `review_ready` before the explicit publish call.
 
 ## Observability
 

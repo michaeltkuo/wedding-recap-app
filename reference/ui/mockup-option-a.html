@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mockup Option A - Voice Memo First</title>
+    <link rel="stylesheet" href="./mockups.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <div class="switcher">
+        <a class="current" href="./mockup-option-a.html">Option A: Voice Memo First</a>
+        <a href="./mockup-option-b.html">Option B: Guided Recorder</a>
+      </div>
+
+      <header class="topbar">
+        <div class="brand">Author Made Recap</div>
+        <div class="user-pill">Signed in as Contractor</div>
+      </header>
+
+      <div class="layout">
+        <section class="panel">
+          <div class="panel-body">
+            <p class="kicker">Happy Path Mockup</p>
+            <h1 id="step-title" class="title"></h1>
+            <p id="step-sub" class="sub"></p>
+            <div class="step-chip"><span class="step-dot"></span><span id="step-chip-text"></span></div>
+
+            <div class="dual-stage">
+              <div class="viewport-card">
+                <div class="viewport-head">
+                  <span>Desktop View</span>
+                  <span>Web App Canvas</span>
+                </div>
+                <div class="viewport-body">
+                  <div class="desktop-shell">
+                    <div class="desktop-bar">
+                      <span class="desktop-dot"></span>
+                      <span class="desktop-dot"></span>
+                      <span class="desktop-dot"></span>
+                    </div>
+                    <div id="desktop-stage" class="desktop-canvas"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="viewport-card">
+                <div class="viewport-head">
+                  <span>Mobile View</span>
+                  <span>Phone Frame</span>
+                </div>
+                <div class="viewport-body">
+                  <div class="phone-shell">
+                    <div class="phone-notch"></div>
+                    <div id="mobile-stage" class="phone-canvas"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="prevBtn" class="btn btn-secondary" type="button">Previous Step</button>
+              <button id="nextBtn" class="btn btn-primary" type="button">Next Step</button>
+            </div>
+            <div class="meta">Destination always visible in flow: michael@authormadephoto.com</div>
+          </div>
+        </section>
+
+        <aside class="side">
+          <h3>Flow Map</h3>
+          <div id="map" class="map"></div>
+          <div id="step-jump" class="step-jump"></div>
+          <p class="foot">
+            Option A stays intentionally minimal: one dominant action, adaptive follow-up only when required,
+            and auto-submit once required details are complete.
+          </p>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const steps = [
+        {
+          name: "Start Session",
+          title: "New Wedding Recap",
+          sub: "Speak naturally for 4-7 minutes. Focus on names, venue, timeline, and signature moments.",
+          desktop: `
+            <div class="big-record">
+              <div>
+                <div class="t0">Ready</div>
+                <div class="t1">Start Recording</div>
+                <div class="t2">00:00</div>
+              </div>
+            </div>
+            <div class="wave">${"<span></span>".repeat(13)}</div>
+            <p class="level">Input level: <strong>Good</strong></p>
+            <ul class="list">
+              <li>One tap starts a new recap session.</li>
+              <li>Primary CTA dominates; no fallback upload here.</li>
+              <li>History is accessible but secondary.</li>
+            </ul>
+          `,
+          mobile: `
+            <p class="mini-kicker">Start Session</p>
+            <p class="mini-title">New Wedding Recap</p>
+            <div class="mobile-record">
+              <div>
+                <div class="t0">Ready</div>
+                <div class="t1">Record</div>
+                <div class="t2">00:00</div>
+              </div>
+            </div>
+            <div class="wave">${"<span></span>".repeat(11)}</div>
+            <p class="level" style="font-size:0.82rem;">Input: <strong>Good</strong></p>
+            <div class="mobile-actions">
+              <button class="btn btn-primary" type="button">Start Recording</button>
+              <button class="btn btn-secondary" type="button">My Submissions</button>
+            </div>
+          `
+        },
+        {
+          name: "Record",
+          title: "Recording In Progress",
+          sub: "Minimal UI with large controls and live waveform confidence.",
+          desktop: `
+            <div class="big-record">
+              <div>
+                <div class="t0">Recording</div>
+                <div class="t1">Stop And Process</div>
+                <div class="t2">03:46</div>
+              </div>
+            </div>
+            <div class="wave">${"<span></span>".repeat(13)}</div>
+            <p class="level">Input level: <strong>Good</strong> · background noise: low</p>
+            <div class="actions">
+              <button class="btn btn-secondary" type="button">Pause</button>
+              <button class="btn btn-primary" type="button">Stop And Process</button>
+            </div>
+          `,
+          mobile: `
+            <p class="mini-kicker">Recording</p>
+            <p class="mini-title">Wedding Recap</p>
+            <div class="mobile-record">
+              <div>
+                <div class="t0">Live</div>
+                <div class="t1">Stop</div>
+                <div class="t2">03:46</div>
+              </div>
+            </div>
+            <div class="wave">${"<span></span>".repeat(11)}</div>
+            <p class="level" style="font-size:0.82rem;">Noise quality: <strong>Good</strong></p>
+            <div class="mobile-actions">
+              <button class="btn btn-secondary" type="button">Pause</button>
+              <button class="btn btn-primary" type="button">Stop And Process</button>
+            </div>
+          `
+        },
+        {
+          name: "Processing",
+          title: "Processing Recap",
+          sub: "Contractor sees exactly what is happening with reliable status updates.",
+          desktop: `
+            <div class="progress-stack">
+              <div class="progress-row">
+                <div class="progress-head"><span>Uploading audio</span><span>100%</span></div>
+                <div class="progress-bar"><i style="width:100%"></i></div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-head"><span>Transcribing</span><span>72%</span></div>
+                <div class="progress-bar"><i style="width:72%"></i></div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-head"><span>Drafting blog</span><span>31%</span></div>
+                <div class="progress-bar"><i style="width:31%"></i></div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-head"><span>Sending to Google Drive</span><span>0%</span></div>
+                <div class="progress-bar"><i style="width:0%"></i></div>
+              </div>
+            </div>
+            <div class="meta">Sending to: michael@authormadephoto.com</div>
+          `,
+          mobile: `
+            <p class="mini-kicker">Processing</p>
+            <p class="mini-title">Sending Recap</p>
+            <ul class="compact-list">
+              <li>Uploading audio: 100%</li>
+              <li>Transcribing: 72%</li>
+              <li>Drafting blog: 31%</li>
+              <li>Sending to Drive: 0%</li>
+            </ul>
+            <div class="meta" style="font-size:0.8rem;">Sending to michael@authormadephoto.com</div>
+          `
+        },
+        {
+          name: "Clarify If Needed",
+          title: "We Need 3 Details To Finish",
+          sub: "Follow-up prompts are focused and short, only when extraction has missing required fields.",
+          desktop: `
+            <div class="form-grid">
+              <label>
+                <div class="kicker" style="margin-bottom:6px">Couple Names</div>
+                <input class="input" value="Alex and Conner" />
+              </label>
+              <label>
+                <div class="kicker" style="margin-bottom:6px">Venue Name</div>
+                <input class="input" value="Walt Disney World Swan Hotel" />
+              </label>
+              <label>
+                <div class="kicker" style="margin-bottom:6px">Venue City and State</div>
+                <input class="input" value="Lake Buena Vista, FL" />
+              </label>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" type="button">Submit Details</button>
+            </div>
+          `,
+          mobile: `
+            <p class="mini-kicker">Follow-Up</p>
+            <p class="mini-title">3 Details Needed</p>
+            <div class="form-grid">
+              <input class="input" value="Alex and Conner" />
+              <input class="input" value="Walt Disney World Swan Hotel" />
+              <input class="input" value="Lake Buena Vista, FL" />
+            </div>
+            <div class="mobile-actions">
+              <button class="btn btn-primary" type="button">Submit Details</button>
+            </div>
+          `
+        },
+        {
+          name: "Sent",
+          title: "Recap Sent",
+          sub: "Clear done state with destination and confidence for the contractor.",
+          desktop: `
+            <ul class="list">
+              <li>Submitted successfully: Today at 4:12 PM</li>
+              <li>Delivered to: michael@authormadephoto.com</li>
+              <li>Status: Ready for editorial review</li>
+            </ul>
+            <div class="actions">
+              <button class="btn btn-primary" type="button">Start Another Recap</button>
+              <button class="btn btn-secondary" type="button">View My Submissions</button>
+            </div>
+          `,
+          mobile: `
+            <p class="mini-kicker">Done</p>
+            <p class="mini-title">Recap Sent</p>
+            <ul class="compact-list">
+              <li>Submitted at 4:12 PM</li>
+              <li>Delivered to Michael</li>
+              <li>Ready for editorial review</li>
+            </ul>
+            <div class="mobile-actions">
+              <button class="btn btn-primary" type="button">Start Another</button>
+              <button class="btn btn-secondary" type="button">My Submissions</button>
+            </div>
+          `
+        }
+      ];
+
+      let currentStep = 0;
+      const titleEl = document.getElementById("step-title");
+      const subEl = document.getElementById("step-sub");
+      const chipEl = document.getElementById("step-chip-text");
+      const desktopStageEl = document.getElementById("desktop-stage");
+      const mobileStageEl = document.getElementById("mobile-stage");
+      const mapEl = document.getElementById("map");
+      const stepJumpEl = document.getElementById("step-jump");
+      const nextBtn = document.getElementById("nextBtn");
+      const prevBtn = document.getElementById("prevBtn");
+
+      function renderFlowMap() {
+        mapEl.innerHTML = steps
+          .map((step, index) => `<div class="map-item ${index === currentStep ? "active" : ""}">${index + 1}. ${step.name}</div>`)
+          .join("");
+
+        stepJumpEl.innerHTML = steps
+          .map(
+            (step, index) =>
+              `<button type="button" class="${index === currentStep ? "active" : ""}" data-step="${index}">${index + 1}</button>`
+          )
+          .join("");
+
+        Array.from(stepJumpEl.querySelectorAll("button")).forEach((button) => {
+          button.addEventListener("click", () => {
+            currentStep = Number(button.dataset.step);
+            renderStep();
+          });
+        });
+      }
+
+      function renderStep() {
+        const step = steps[currentStep];
+        titleEl.textContent = step.title;
+        subEl.textContent = step.sub;
+        chipEl.textContent = `Step ${currentStep + 1} of ${steps.length} · ${step.name}`;
+        desktopStageEl.innerHTML = step.desktop;
+        mobileStageEl.innerHTML = step.mobile;
+        prevBtn.disabled = currentStep === 0;
+        nextBtn.disabled = currentStep === steps.length - 1;
+        renderFlowMap();
+      }
+
+      nextBtn.addEventListener("click", () => {
+        if (currentStep < steps.length - 1) {
+          currentStep += 1;
+          renderStep();
+        }
+      });
+
+      prevBtn.addEventListener("click", () => {
+        if (currentStep > 0) {
+          currentStep -= 1;
+          renderStep();
+        }
+      });
+
+      renderStep();
+    </script>
+  </body>
+</html>

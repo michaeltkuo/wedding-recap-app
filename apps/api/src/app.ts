@@ -21,12 +21,30 @@ import {
   metricsRegistry,
   publishSession,
   runPipeline,
-  signUpload
+  signUpload,
+  uploadAudio
 } from "./lib/pipeline.js";
 
 export function createApp() {
   const app = express();
-  app.use(cors({ origin: API_CONFIG.web.origin, credentials: true }));
+  app.use(
+    cors({
+      origin(requestOrigin, callback) {
+        if (!requestOrigin) {
+          callback(null, true);
+          return;
+        }
+
+        if (API_CONFIG.web.origins.includes(requestOrigin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`CORS blocked for origin: ${requestOrigin}`));
+      },
+      credentials: true
+    })
+  );
   app.use(express.json());
 
   function readCookie(cookieHeader: string | undefined, cookieName: string) {
@@ -114,6 +132,23 @@ export function createApp() {
     }
   });
 
+  app.put(
+    "/api/uploads/:uploadToken",
+    express.raw({ type: () => true, limit: API_CONFIG.upload.maxSizeBytes }),
+    (request, response) => {
+      try {
+        assertContractorToken(request.header("x-contractor-token"));
+        if (!Buffer.isBuffer(request.body)) {
+          throw new Error("Audio upload body is required");
+        }
+        const result = uploadAudio(request.params.uploadToken, request.body, request.header("content-type") ?? "");
+        response.status(201).json(result);
+      } catch (error) {
+        response.status(400).json({ error: error instanceof Error ? error.message : "Audio upload failed" });
+      }
+    }
+  );
+
   app.post("/api/transcriptions", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
@@ -134,10 +169,10 @@ export function createApp() {
     }
   });
 
-  app.post("/api/recaps/draft", (request, response) => {
+  app.post("/api/recaps/draft", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
-      response.json(draftSession(request.body.sessionId));
+      response.json(await draftSession(request.body.sessionId));
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : "Draft failed" });
     }

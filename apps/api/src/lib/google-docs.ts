@@ -36,13 +36,6 @@ function formatBlogOutput(blogOutput: BlogOutput) {
   ].join("\n");
 }
 
-export function buildFallbackGoogleDoc(sessionId: string, status: "ready" | "queued") {
-  return {
-    docId: sessionId,
-    url: `https://docs.google.com/document/d/${sessionId}`,
-    status
-  } as const;
-}
 
 export function canPublishToGoogleDocs() {
   return isGoogleOAuthConfigured() && googleAuthStore.hasConnection();

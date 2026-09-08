@@ -2,7 +2,7 @@
 
 ## Monorepo Layout
 
-- `apps/web`: contractor capture UI and editor checklist gate.
+- `apps/web`: contractor audio capture, coverage review, explicit delivery, and device-local recap library.
 - `apps/api`: stateful pipeline orchestration and API surface.
 - `packages/contracts`: shared schemas, validation rules, and utility helpers.
 
@@ -38,6 +38,7 @@ Backend state machine includes:
 - `transcribing`
 - `extracting`
 - `follow_up_required`
+- `review_ready`
 - `drafting`
 - `publishing`
 - `completed`
@@ -59,15 +60,16 @@ Frontend presents a simplified UX state model:
 
 1. `POST /api/sessions` creates a session.
 2. `POST /api/uploads/sign-url` creates single-use upload metadata.
-3. `POST /api/transcriptions` starts async pipeline processing.
-4. Frontend polls `GET /api/sessions/:sessionId`.
-5. Optional follow-up flow patches transcript and retries pipeline submission.
-6. Completed flow surfaces draft payload and Google Doc info.
+3. `PUT /api/uploads/:uploadToken` receives the captured audio bytes and advances the session to `uploaded`.
+4. `POST /api/transcriptions` starts async transcription/extraction processing.
+5. Frontend polls `GET /api/sessions/:sessionId` until it reaches `review_ready`, a follow-up state, or an error.
+6. Contractor explicitly dispatches a reviewed recap through `POST /api/docs/publish`.
+7. Completed flow surfaces draft payload, Google Doc info, and a device-local history entry.
 
 ## Reliability and Guardrails
 
 - Signed upload constraints: MIME, size, TTL, and single-use token behavior.
-- Extraction retry policy: one automatic retry before partial fallback.
+- Extraction retry policy: one automatic retry; if extraction still fails, the session moves to `error` with notes.
 - Follow-up prompts generated when required recap fields are missing.
 - Idempotency map prevents duplicate pipeline execution per idempotency key.
 
@@ -81,6 +83,6 @@ Frontend presents a simplified UX state model:
 
 ## Current Gaps
 
-- Pipeline provider integrations are simulated rather than wired to production services.
-- In-memory store and queue are process-local.
-- Publish flow currently returns stub Google Doc metadata.
+- Pipeline requires external providers and fails fast when provider credentials are missing.
+- In-memory store and queue are process-local; received audio bytes are retained only for the process lifetime.
+- Publish flow requires active Google OAuth connectivity.

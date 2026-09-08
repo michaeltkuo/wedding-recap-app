@@ -1,30 +1,24 @@
 export type UiStage =
-  | "idle"
+  | "ready"
   | "recording"
   | "uploading"
   | "processing"
-  | "follow_up_required"
-  | "completed"
-  | "partial"
+  | "review"
+  | "follow_up"
+  | "sending"
+  | "delivered"
   | "error";
 
 const transitions: Record<UiStage, UiStage[]> = {
-  idle: ["recording", "uploading", "error"],
-  recording: ["uploading", "idle", "error"],
+  ready: ["recording", "uploading", "error"],
+  recording: ["uploading", "ready", "error"],
   uploading: ["processing", "error"],
-  processing: ["follow_up_required", "completed", "partial", "error"],
-  follow_up_required: ["uploading", "error"],
-  completed: ["idle"],
-  partial: ["uploading", "error"],
-  error: ["idle", "uploading"]
-};
-
-export type ApprovalChecklist = {
-  factualAccuracy: boolean;
-  brandVoice: boolean;
-  seoStructure: boolean;
-  imageSlugs: boolean;
-  noOpenGaps: boolean;
+  processing: ["review", "follow_up", "error"],
+  review: ["sending", "ready", "error"],
+  follow_up: ["uploading", "ready", "error"],
+  sending: ["delivered", "error"],
+  delivered: ["ready"],
+  error: ["ready", "uploading"]
 };
 
 export function transitionUiStage(current: UiStage, next: UiStage) {
@@ -32,8 +26,4 @@ export function transitionUiStage(current: UiStage, next: UiStage) {
     throw new Error(`Invalid UI transition from ${current} to ${next}`);
   }
   return next;
-}
-
-export function canPublish(checklist: ApprovalChecklist) {
-  return Object.values(checklist).every(Boolean);
 }

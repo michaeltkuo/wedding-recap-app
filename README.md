@@ -12,14 +12,11 @@ This workspace is a TypeScript monorepo with three packages:
 
 ## Product Flow
 
-1. Contractor starts and stops a guided recap capture.
-2. Frontend requests a signed upload policy.
-3. API starts asynchronous processing for transcript -> recap -> draft.
-4. UI polls session state and renders:
-   - completed draft + Google Doc link
-   - follow-up prompts if required fields are missing
-   - partial state when extraction fails twice
-5. Editor checklist gates final handoff.
+1. Contractor records a field recap in the browser or imports a supported audio file.
+2. Frontend requests a signed upload policy and PUTs the captured audio bytes to the scoped upload URL.
+3. API asynchronously transcribes and extracts coverage, then pauses at review readiness.
+4. Contractor reviews the coverage map, supplies required follow-up details when needed, and explicitly sends the recap.
+5. API generates the working draft and delivers the Google Doc; the app keeps a device-local recap library.
 
 ## Quick Start
 
@@ -78,7 +75,8 @@ See [docs/API.md](docs/API.md) for request and response details.
 
 ## Important Notes
 
-- This repo still falls back to a local Google Doc URL when OAuth is not configured, but it can publish to a real Google Doc once Google OAuth is connected.
+- This repo does not use fallback publish behavior. Google Docs delivery fails unless Google OAuth is connected.
+- Audio transcription and recap extraction are provider-backed and require `OPENAI_API_KEY`.
 - Contracts are the source of truth. Update shared schemas in `packages/contracts/src/index.ts` first when changing payload shapes.
 - QA artifacts are written under `.gstack/qa-reports/`.
 

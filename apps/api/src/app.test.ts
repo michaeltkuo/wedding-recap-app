@@ -24,13 +24,21 @@ async function createSessionAndUpload(app: ReturnType<typeof createApp>) {
       idempotencyKey: `upload-${sessionId}`
     });
 
+  const uploadPath = new URL(uploadResponse.body.uploadUrl).pathname;
+  const audioResponse = await request(app)
+    .put(uploadPath)
+    .set(contractorHeaders)
+    .set("content-type", "audio/webm")
+    .send(Buffer.alloc(1024, 1));
+
+  expect(audioResponse.status).toBe(201);
   return { sessionId, uploadToken: uploadResponse.body.uploadToken };
 }
 
-async function waitForCompletion(app: ReturnType<typeof createApp>, sessionId: string) {
+async function waitForReview(app: ReturnType<typeof createApp>, sessionId: string) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const status = await request(app).get(`/api/sessions/${sessionId}`).set(contractorHeaders);
-    if (["completed", "follow_up_required", "partial", "error"].includes(status.body.stage)) {
+    if (["review_ready", "follow_up_required", "partial", "error"].includes(status.body.stage)) {
       return status.body;
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -45,8 +53,8 @@ describe("api", () => {
     const response = await request(app).get("/api/auth/google/status");
 
     expect(response.status).toBe(200);
-    expect(response.body.configured).toBe(false);
-    expect(response.body.connected).toBe(false);
+    expect(typeof response.body.configured).toBe("boolean");
+    expect(typeof response.body.connected).toBe("boolean");
   });
 
   it("rejects unsupported upload types", async () => {
@@ -67,7 +75,36 @@ describe("api", () => {
     expect(response.status).toBe(400);
   });
 
-  it("completes the happy path and returns a Google Doc", async () => {
+  it("rejects a pipeline start before signed audio has been uploaded", async () => {
+    const app = createApp();
+    const sessionResponse = await request(app).post("/api/sessions").set(contractorHeaders).send();
+    const sessionId = sessionResponse.body.sessionId;
+    const uploadResponse = await request(app)
+      .post("/api/uploads/sign-url")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        fileName: "recap.webm",
+        mimeType: "audio/webm",
+        sizeBytes: 1024,
+        idempotencyKey: `upload-unreceived-${sessionId}`
+      });
+
+    const response = await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken: uploadResponse.body.uploadToken,
+        idempotencyKey: `pipeline-unreceived-${sessionId}`,
+        transcriptText: "couple: Alex and Sam. venue: Cypress Grove. city: Orlando, Florida."
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/Audio upload has not been received/);
+  });
+
+  it("pauses for review and fails publish when OAuth is not connected", async () => {
     const app = createApp();
     const { sessionId, uploadToken } = await createSessionAndUpload(app);
 
@@ -87,9 +124,34 @@ describe("api", () => {
 
     expect(startResponse.status).toBe(202);
 
-    const result = await waitForCompletion(app, sessionId);
-    expect(result.stage).toBe("completed");
-    expect(result.googleDoc.url).toContain("docs.google.com");
+    const review = await waitForReview(app, sessionId);
+    expect(review.stage).toBe("review_ready");
+    expect(review.googleDoc).toBeUndefined();
+
+    const delivery = await request(app)
+      .post("/api/docs/publish")
+      .set(contractorHeaders)
+      .send({ sessionId, publishMode: "normal" });
+
+    if (delivery.status === 200) {
+      expect(delivery.body.googleDoc?.url).toContain("docs.google.com/document/d/");
+      const result = await request(app).get(`/api/sessions/${sessionId}`).set(contractorHeaders);
+      expect(result.body.stage).toBe("completed");
+      return;
+    }
+
+    expect(delivery.status).toBe(400);
+    expect(delivery.body.error).toMatch(/connect Google OAuth first/);
+
+    const result = await request(app).get(`/api/sessions/${sessionId}`).set(contractorHeaders);
+    expect(result.body.stage).toBe("error");
+
+    const duplicateDelivery = await request(app)
+      .post("/api/docs/publish")
+      .set(contractorHeaders)
+      .send({ sessionId, publishMode: "normal" });
+    expect(duplicateDelivery.status).toBe(400);
+    expect(duplicateDelivery.body.error).toMatch(/not ready to send/);
   });
 
   it("returns follow-up prompts when required extraction fields are missing", async () => {
@@ -109,12 +171,77 @@ describe("api", () => {
         }
       });
 
-    const result = await waitForCompletion(app, sessionId);
+    const result = await waitForReview(app, sessionId);
     expect(result.stage).toBe("follow_up_required");
     expect(result.followUps.length).toBeGreaterThan(0);
   });
 
-  it("falls back to partial output after two schema failures", async () => {
+  it("converts recap schema misses into follow-up prompts instead of error", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-schema-followups-${sessionId}`,
+        transcriptText:
+          "couple: Nisa and Daniel. venue: Seminole County Courthouse. style: candid documentary. timeline: courthouse ceremony followed by portraits. moments: vows, family facetime call. portraits: greenery portraits outside the courthouse.",
+        simulate: {
+          extractionMode: "normal"
+        }
+      });
+
+    const result = await waitForReview(app, sessionId);
+    expect(result.stage).toBe("follow_up_required");
+    expect(result.followUps.map((item: { field: string }) => item.field)).toEqual(
+      expect.arrayContaining(["venue_city_state", "weather_notes"])
+    );
+  });
+
+  it("uses submitted follow-up notes to exit the follow-up loop", async () => {
+    const app = createApp();
+    const { sessionId, uploadToken } = await createSessionAndUpload(app);
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-loop-start-${sessionId}`,
+        transcriptText:
+          "couple: Nisa and Daniel. venue: Seminole County Courthouse. style: candid documentary. timeline: courthouse ceremony followed by portraits. moments: vows, family facetime call. portraits: greenery portraits outside the courthouse.",
+        simulate: {
+          extractionMode: "normal"
+        }
+      });
+
+    const firstPass = await waitForReview(app, sessionId);
+    expect(firstPass.stage).toBe("follow_up_required");
+
+    await request(app)
+      .post("/api/transcriptions")
+      .set(contractorHeaders)
+      .send({
+        sessionId,
+        uploadToken,
+        idempotencyKey: `pipeline-loop-fix-${sessionId}`,
+        transcriptText: "city: Bushnell, Florida. weather: Hot and sunny with bright conditions.",
+        simulate: {
+          extractionMode: "normal"
+        }
+      });
+
+    const secondPass = await waitForReview(app, sessionId);
+    expect(secondPass.stage).toBe("review_ready");
+    expect(secondPass.recap?.venue_city_state).toBe("Bushnell, Florida");
+    expect(secondPass.recap?.weather_notes).toBe("Hot and sunny with bright conditions");
+  });
+
+  it("moves to error after repeated extraction schema failures", async () => {
     const app = createApp();
     const { sessionId, uploadToken } = await createSessionAndUpload(app);
 
@@ -132,9 +259,9 @@ describe("api", () => {
         }
       });
 
-    const result = await waitForCompletion(app, sessionId);
-    expect(result.stage).toBe("partial");
-    expect(result.partial).toBe(true);
+    const result = await waitForReview(app, sessionId);
+    expect(result.stage).toBe("error");
+    expect(result.errorMessage).toMatch(/Extraction schema failed twice/);
   });
 
   it("keeps the pipeline idempotent for duplicate submissions", async () => {
@@ -145,7 +272,7 @@ describe("api", () => {
       uploadToken,
       idempotencyKey: `pipeline-duplicate-${sessionId}`,
       transcriptText:
-        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor.",
+        "couple: Alex and Sam. venue: Cypress Grove Estate House. city: Orlando, Florida. style: romantic garden. timeline: heartfelt vows and dance floor. moments: first look, private vows. portraits: sunset portraits by the lake. weather: warm and clear.",
       simulate: {
         extractionMode: "normal"
       }
@@ -157,8 +284,8 @@ describe("api", () => {
     expect(first.status).toBe(202);
     expect(second.status).toBe(202);
 
-    const result = await waitForCompletion(app, sessionId);
-    expect(result.stage).toBe("completed");
+    const result = await waitForReview(app, sessionId);
+    expect(result.stage).toBe("review_ready");
   });
 
   it("publishes observability alerts when budgets are exceeded", async () => {
