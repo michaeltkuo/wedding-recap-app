@@ -56,6 +56,7 @@ export const API_CONFIG = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY ?? "",
     transcriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "gpt-4o-mini-transcribe",
-    extractionModel: process.env.OPENAI_EXTRACTION_MODEL ?? "gpt-4.1-mini"
+    extractionModel: process.env.OPENAI_EXTRACTION_MODEL ?? "gpt-4.1-mini",
+    generationModel: process.env.OPENAI_GENERATION_MODEL ?? "gpt-4.1"
   }
 } as const;

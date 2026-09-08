@@ -169,10 +169,10 @@ export function createApp() {
     }
   });
 
-  app.post("/api/recaps/draft", (request, response) => {
+  app.post("/api/recaps/draft", async (request, response) => {
     try {
       assertContractorToken(request.header("x-contractor-token"));
-      response.json(draftSession(request.body.sessionId));
+      response.json(await draftSession(request.body.sessionId));
     } catch (error) {
       response.status(400).json({ error: error instanceof Error ? error.message : "Draft failed" });
     }

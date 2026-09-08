@@ -42,7 +42,7 @@ describe("eval gates", () => {
         simulate: { extractionMode: "normal" }
       });
 
-      draftSession(session.sessionId);
+      await draftSession(session.sessionId);
 
       const result = getSessionResult(session.sessionId);
       const title = result.blogOutput?.primary_title.toLowerCase() ?? "";
