@@ -47,10 +47,10 @@ type View = "capture" | "library";
 const historyStorageKey = "recap-studio-history";
 
 const defaultEvent: EventDetails = {
-  dateLabel: "Saturday, September 7",
-  coupleNames: "Alex + Sam",
-  venueName: "Cypress Grove Estate House",
-  cityState: "Orlando, Florida"
+  dateLabel: "",
+  coupleNames: "",
+  venueName: "",
+  cityState: ""
 };
 
 const allowedMimeTypes = new Set(["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav"]);
@@ -156,47 +156,123 @@ function Waveform({ level, compact = false }: { level: number; compact?: boolean
   );
 }
 
-function CoverageMap({ recap }: { recap?: Recap }) {
-  const coverage = [
+type CoverageField = "venue_name" | "timeline_summary" | "portrait_notes" | "reception_highlights" | "weather_notes";
+
+function getCoverageRows(recap?: Recap) {
+  return [
     {
+      key: "venue_name" as const,
       label: "Setting",
       value: recap?.venue_name && recap.venue_city_state ? `${recap.venue_name}, ${recap.venue_city_state}` : "Not found in this recap",
       complete: Boolean(recap?.venue_name && recap.venue_city_state)
     },
     {
+      key: "timeline_summary" as const,
       label: "Ceremony",
       value: recap?.timeline_summary ?? "Not found in this recap",
       complete: Boolean(recap?.timeline_summary)
     },
     {
+      key: "portrait_notes" as const,
       label: "Portraits",
       value: recap?.portrait_notes ?? "Not found in this recap",
       complete: Boolean(recap?.portrait_notes)
     },
     {
+      key: "reception_highlights" as const,
       label: "Reception",
       value: recap?.reception_highlights?.join(", ") ?? "Not found in this recap",
       complete: Boolean(recap?.reception_highlights?.length)
     },
     {
+      key: "weather_notes" as const,
       label: "Weather",
       value: recap?.weather_notes ?? "Not found in this recap",
       complete: Boolean(recap?.weather_notes)
     }
   ];
+}
+
+export function CoverageMap({
+  recap,
+  activeField,
+  gapDraft,
+  onGapDraftChange,
+  onOpenRow,
+  onSaveDetail,
+  onCancelDetail
+}: {
+  recap?: Recap;
+  activeField: CoverageField | null;
+  gapDraft: string;
+  onGapDraftChange: (value: string) => void;
+  onOpenRow: (field: CoverageField) => void;
+  onSaveDetail: (field: CoverageField, value: string) => void;
+  onCancelDetail: () => void;
+}) {
+  const coverage = getCoverageRows(recap);
 
   return (
     <div className="coverage-map">
-      {coverage.map((item) => (
-        <div className="coverage-row" key={item.label}>
-          <span className={`coverage-icon ${item.complete ? "is-complete" : "is-open"}`} aria-hidden="true">
-            {item.complete ? <Check size={14} /> : <CircleAlert size={14} />}
-          </span>
-          <strong>{item.label}</strong>
-          <p>{item.value}</p>
-          <span className={`coverage-status ${item.complete ? "is-complete" : "is-open"}`}>{item.complete ? "Captured" : "Open"}</span>
-        </div>
-      ))}
+      {coverage.map((item) => {
+        const isOpen = !item.complete;
+        const isActive = activeField === item.key;
+
+        return (
+          <div className="coverage-group" key={item.label}>
+            <button
+              type="button"
+              className={`coverage-row ${isOpen ? "is-open" : "is-complete"}`}
+              onClick={isOpen ? () => onOpenRow(item.key) : undefined}
+              aria-expanded={isActive}
+              aria-label={item.label}
+              disabled={Boolean(item.complete)}
+            >
+              <span className={`coverage-icon ${item.complete ? "is-complete" : "is-open"}`} aria-hidden="true">
+                {item.complete ? <Check size={14} /> : <CircleAlert size={14} />}
+              </span>
+              <strong>{item.label}</strong>
+              <p>{item.value}</p>
+              <span className={`coverage-status ${item.complete ? "is-complete" : "is-open"}`}>{item.complete ? "Captured" : isActive ? "Open" : "Open"}</span>
+            </button>
+            {isActive && isOpen ? (
+              <div className="coverage-gap-editor" aria-live="polite">
+                <input
+                  value={gapDraft}
+                  onChange={(event) => onGapDraftChange(event.target.value)}
+                  placeholder={item.label === "Weather" ? "Weather detail" : `Add ${item.label.toLowerCase()} detail`}
+                  aria-label={`Add ${item.label.toLowerCase()} detail`}
+                />
+                <button className="secondary-button small-button" type="button" onClick={onCancelDetail}>Cancel</button>
+                <button className="primary-button small-button" type="button" onClick={() => onSaveDetail(item.key, gapDraft)}>
+                  Save detail
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function TranscriptDrawer({ isOpen, onClose, text }: { isOpen: boolean; onClose: () => void; text: string }) {
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="transcript-drawer" role="dialog" aria-modal="true" aria-label="Transcript preview">
+      <div className="transcript-header">
+        <h2>Transcript preview</h2>
+        <button className="icon-button light-icon-button" type="button" onClick={onClose} aria-label="Close transcript"><X size={16} /></button>
+      </div>
+      <p className="transcript-helper">Transcript helps verify details before delivery.</p>
+      {text.trim() ? (
+        <div className="transcript-copy" aria-live="polite">{text.split(/\n+/).filter(Boolean).map((paragraph, index) => <p key={`${paragraph.slice(0, 12)}-${index}`}>{paragraph}</p>)}</div>
+      ) : (
+        <div className="transcript-empty">Transcript is not available yet for this session. You can still resolve open details and send recap.</div>
+      )}
     </div>
   );
 }
@@ -260,6 +336,9 @@ export default function App() {
   const [result, setResult] = useState<SessionResult | null>(null);
   const [eventDetails, setEventDetails] = useState<EventDetails>(defaultEvent);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [activeCoverageField, setActiveCoverageField] = useState<CoverageField | null>(null);
+  const [gapDraft, setGapDraft] = useState("");
   const [capturedAudio, setCapturedAudio] = useState<Blob | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready to capture your field note.");
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
@@ -488,7 +567,61 @@ export default function App() {
   const audioLevelLabel = recorder.level > 0.55 ? "Strong" : recorder.level > 0.2 ? "Good" : "Listening";
   const activeCue = storyCues[cueIndex % storyCues.length];
   const recap = result?.recap;
+  const transcriptText = result?.transcript?.entries?.map((entry) => entry.utterance_text).join("\n\n") ?? "";
   const historyForDisplay = history.slice(0, 12);
+
+  function openCoverageRow(field: CoverageField) {
+    const currentValue = recap?.[field];
+    const draftValue = field === "reception_highlights"
+      ? Array.isArray(currentValue) ? currentValue.join(", ") : ""
+      : typeof currentValue === "string" ? currentValue : "";
+    setActiveCoverageField(field);
+    setGapDraft(draftValue);
+  }
+
+  function closeCoverageEditor() {
+    setActiveCoverageField(null);
+    setGapDraft("");
+  }
+
+  function saveCoverageDetail(field: CoverageField, value: string) {
+    const nextValue = value.trim();
+    if (!nextValue) {
+      return;
+    }
+
+    setResult((currentResult) => {
+      if (!currentResult) {
+        return currentResult;
+      }
+
+      const existingRecap = currentResult.recap ?? {
+        couple_names: eventDetails.coupleNames || "",
+        venue_name: eventDetails.venueName || "",
+        venue_city_state: eventDetails.cityState || "",
+        wedding_style: "",
+        timeline_summary: "",
+        signature_moments: [],
+        portrait_notes: "",
+        weather_notes: "",
+        vendor_notes: [],
+        cultural_traditions: [],
+        reception_highlights: []
+      };
+
+      const nextRecap = {
+        ...existingRecap,
+        ...(field === "reception_highlights" ? { reception_highlights: [nextValue] } : { [field]: nextValue })
+      } as Recap;
+
+      return {
+        ...currentResult,
+        recap: nextRecap
+      };
+    });
+
+    closeCoverageEditor();
+  }
 
   function renderCaptureContent() {
     if (uiStage === "recording") {
@@ -547,12 +680,21 @@ export default function App() {
     if (uiStage === "review") {
       return (
         <section className="light-workspace review-workspace" aria-labelledby="review-heading">
-          <header className="workspace-topbar light-topbar"><div className="session-location">{recap?.couple_names || eventDetails.coupleNames} / Review</div><button className="icon-button light-icon-button" type="button" aria-label="Transcript preview"><FileText size={18} /></button></header>
+          <header className="workspace-topbar light-topbar"><div className="session-location">{recap?.couple_names || eventDetails.coupleNames || "New field note"} / Review</div><button className="icon-button light-icon-button" type="button" aria-label="Transcript preview" onClick={() => setTranscriptOpen(true)}><FileText size={18} /></button></header>
           <div className="review-content">
-            <div className="review-heading"><div><p className="eyebrow">Coverage map</p><h1 id="review-heading">The story is taking shape.</h1><p>We found the important parts of the day. Review the coverage, then send it to Michael.</p></div><strong>{recap ? "5 / 5 FOUND" : "IN REVIEW"}</strong></div>
-            <CoverageMap recap={recap} />
-            <div className="review-note"><div><h2>Ready when you are.</h2><p>You can send this recap now, or read the transcript before delivery.</p></div><button className="secondary-button" type="button"><FileText size={16} />Read transcript</button></div>
+            <div className="review-heading"><div><p className="eyebrow">Coverage map</p><h1 id="review-heading">The story is taking shape.</h1><p>Review the coverage, then send it to Michael. Open rows are actionable and can be resolved inline.</p></div><strong>{recap ? "5 / 5 FOUND" : "IN REVIEW"}</strong></div>
+            <CoverageMap
+              recap={recap}
+              activeField={activeCoverageField}
+              gapDraft={gapDraft}
+              onGapDraftChange={setGapDraft}
+              onOpenRow={openCoverageRow}
+              onSaveDetail={saveCoverageDetail}
+              onCancelDetail={closeCoverageEditor}
+            />
+            <div className="review-note"><div><h2>Ready when you are.</h2><p>You can send this recap now, or read the transcript before delivery.</p></div><button className="secondary-button" type="button" onClick={() => setTranscriptOpen(true)}><FileText size={16} />Read transcript</button></div>
             <div className="review-actions"><button className="secondary-button" type="button" onClick={startNewRecap}>Discard and start again</button><button className="primary-button" type="button" onClick={() => void sendRecap()}><Send size={16} />Send recap</button></div>
+            <TranscriptDrawer isOpen={transcriptOpen} onClose={() => setTranscriptOpen(false)} text={transcriptText} />
           </div>
         </section>
       );
@@ -608,11 +750,11 @@ export default function App() {
         </header>
         <div className="ready-layout">
           <section className="ready-intro">
-            <p className="eyebrow">{eventDetails.dateLabel}</p>
-            <h1 id="ready-heading">{eventDetails.coupleNames || "New wedding recap"}</h1>
-            <p className="event-meta"><strong>{eventDetails.venueName || "Add a venue"}</strong><br />{eventDetails.cityState || "Add city and state"}</p>
+            <p className="eyebrow">{eventDetails.dateLabel || "No session metadata yet"}</p>
+            <h1 id="ready-heading">{eventDetails.coupleNames || "Start a new recap"}</h1>
+            <p className="event-meta"><strong>{eventDetails.venueName || "No client selected yet"}</strong><br />{eventDetails.cityState || "Add names and venue now, or leave it blank and let us infer from your recording."}</p>
             <div className="intro-rule" />
-            <p>Tell the day in your own order. When you stop, we will shape the raw recap into an editorial handoff.</p>
+            <p>Talk through the day in your own order. Add names and venue now, or let us infer from your recording.</p>
             {detailsOpen ? <div className="event-editor"><label>Couple names<input value={eventDetails.coupleNames} onChange={(event) => setEventDetails((current) => ({ ...current, coupleNames: event.target.value }))} /></label><label>Venue<input value={eventDetails.venueName} onChange={(event) => setEventDetails((current) => ({ ...current, venueName: event.target.value }))} /></label><label>City and state<input value={eventDetails.cityState} onChange={(event) => setEventDetails((current) => ({ ...current, cityState: event.target.value }))} /></label><button className="text-icon-button" type="button" onClick={() => setDetailsOpen(false)}><Check size={16} />Done</button></div> : null}
           </section>
           <section className="record-launch-panel">
