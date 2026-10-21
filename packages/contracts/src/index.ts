@@ -147,7 +147,7 @@ export const BlogOutputSchema = z.object({
     categories: z.array(z.string().min(1)).min(1),
     tags: z.array(z.string().min(1)),
     hero_alt_text: z.string().min(1),
-    hero_caption_keywords: z.array(z.string().min(1)),
+    hero_file_name: z.string().min(1),
     image_file_prefix: z.string().min(1)
   }),
   review_flags: z.array(z.string().min(1)).default([])

@@ -318,7 +318,7 @@ function simulatedGeneratedPost(facts: PostFacts, recap: Recap): GeneratedPost {
     closing: `Congratulations again, ${couple}! We wish you so much happiness in the years ahead.`,
     seo_description: `${couple}’s ${recap.wedding_style} wedding in ${facts.city}, ${facts.state}. View their wedding photography gallery here!`,
     hero_alt_text: `${couple} on their wedding day in ${facts.city}, ${facts.state}`,
-    hero_caption_keywords: [`${recap.wedding_style} wedding`],
+    venue_type_term: "unique",
     tags: [`${recap.wedding_style} wedding`]
   });
 }

@@ -235,7 +235,7 @@ Before writing code, we read ~100 published posts from the public Squarespace bl
 | Full transcript passed to the generator; extraction keeps anecdotes/quotes/behind-the-scenes | Done | `prompts.ts` |
 | Intake: couple, venues + church checkbox, team roles, kids, couple story, vendors | Done | `apps/web/src/PostDetailsForm.tsx` |
 | Golden tests from published posts and Amy's comments | Done | `house-style.test.ts` |
-| Hero caption master string | **Open, optional.** Hidden captions aren't in Squarespace's public feed. With one copy pasted in, the app could write the full edited caption instead of a list of keywords to swap in. |
+| Hero SEO keyword string | Done. The hidden caption doesn't reach the browser, but the same string lives in the hero image's **file name**, which is public. The template was taken from the live Irelis & Dillon and Nicole & Jeff posts, and a test reproduces Irelis & Dillon's exactly. | `buildHeroFileName` |
 | Story follow-up questions during review | **Open.** Not built yet; the couple-story fields cover part of it. |
 | Prefill intake from bookings / logistics sheet | **Open.** |
 | Gallery ordering helper | **Open** (later). |

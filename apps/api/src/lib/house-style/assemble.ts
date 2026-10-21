@@ -9,7 +9,9 @@ import {
   SEO_TITLE_SUFFIX,
   TAG_VOCABULARY,
   VENUE_SPOTLIGHTS,
+  HERO_KEYWORD_CITIES,
   galleryCallToAction,
+  heroKeywordTail,
   type RegionId
 } from "./config.js";
 import { hasVideo, namedVenues, slugVenues, type PostFacts, type TeamCredit } from "./facts.js";
@@ -74,8 +76,18 @@ export function buildPostTitle(facts: PostFacts, generated: Pick<GeneratedPost, 
   return `${facts.partnerOne} & ${facts.partnerTwo}’s ${generated.title_descriptor} ${generated.event_type}${venuePhrase(facts, " and ")} in ${facts.city}, ${facts.state}`;
 }
 
+function keywordLead(facts: PostFacts, keywordPhrase: string) {
+  return `${capitalizeFirst(keywordPhrase)}${venuePhrase(facts, " with a wedding reception at ")} in ${facts.city}, ${facts.state}`;
+}
+
 export function buildKeywordLine(facts: PostFacts, keywordPhrase: string) {
-  return `${capitalizeFirst(keywordPhrase)}${venuePhrase(facts, " with a wedding reception at ")} in ${facts.city}, ${facts.state} | ${KEYWORD_LINE_SUFFIX}`;
+  return `${keywordLead(facts, keywordPhrase)} | ${KEYWORD_LINE_SUFFIX}`;
+}
+
+// "Outdoor wedding at historic home wedding venue Villa Festa in DeLand, FL – wedding photographer Clermont … near me"
+export function buildHeroFileName(facts: PostFacts, generated: Pick<GeneratedPost, "keyword_phrase" | "venue_type_term">) {
+  const cities = dedupeCaseInsensitive([...HERO_KEYWORD_CITIES, ...(facts.city.startsWith("[") ? [] : [facts.city])]);
+  return `${keywordLead(facts, generated.keyword_phrase)} – ${heroKeywordTail(cities, generated.venue_type_term.toLowerCase())}`;
 }
 
 export function introLocation(facts: PostFacts, region: RegionId | undefined) {
@@ -171,15 +183,6 @@ function buildTags(facts: PostFacts, suggested: string[]) {
   ]);
 }
 
-function buildHeroCaptionKeywords(facts: PostFacts, region: RegionId | undefined, suggested: string[]) {
-  return dedupeCaseInsensitive([
-    ...suggested,
-    ...[facts.ceremonyVenue, facts.receptionVenue].flatMap((venue) => (venue ? [venue.name] : [])),
-    facts.city,
-    ...(region ? REGIONS[region].keywords : [])
-  ]);
-}
-
 export function assembleBlogOutput(facts: PostFacts, generated: GeneratedPost, lintFlags: string[] = []): BlogOutput {
   const flags = [...facts.flags];
 
@@ -229,7 +232,7 @@ export function assembleBlogOutput(facts: PostFacts, generated: GeneratedPost, l
       categories: buildCategories(facts),
       tags,
       hero_alt_text: generated.hero_alt_text,
-      hero_caption_keywords: buildHeroCaptionKeywords(facts, region, generated.hero_caption_keywords),
+      hero_file_name: buildHeroFileName(facts, generated),
       image_file_prefix: buildImageFilePrefix(facts)
     },
     review_flags: [...flags, ...lintFlags]

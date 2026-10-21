@@ -56,7 +56,7 @@ describe("contracts", () => {
         categories: ["Recent Weddings", "Kelly"],
         tags: ["garden wedding"],
         hero_alt_text: "Alex and Sam by the lake",
-        hero_caption_keywords: ["garden wedding"],
+        hero_file_name: "Romantic garden wedding at Cypress Grove Estate House in Orlando, FL – wedding photographer Orlando",
         image_file_prefix: "alex-sam-cypress-grove-estate-house-author-made-photo"
       }
     };

@@ -26,7 +26,7 @@ function draft(overrides: Record<string, unknown> = {}) {
     seo_description:
       "Elisha & Thomas’s refined Catholic wedding at St. Augustine Catholic Church & Student Center in Gainesville, FL, with Jane Austen-inspired bridal party portraits and a joyful reception at the historic Thomas Center. A traditional Catholic mass ceremony, choreographed first dance, and heartfelt toasts. View their wedding photography and video here!",
     hero_alt_text: "Elisha and Thomas among the columns of the Thomas Center",
-    hero_caption_keywords: ["Catholic church wedding"],
+    venue_type_term: "historic",
     tags: ["elegant wedding"],
     ...overrides
   };

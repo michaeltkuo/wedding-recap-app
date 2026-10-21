@@ -67,7 +67,7 @@ export function buildPasteSheet(blogOutput: BlogOutput): DocParagraph[] {
   paragraphs.push(
     settingParagraph("Post title", blogOutput.post_title),
     settingParagraph("Hero image alt text", settings.hero_alt_text),
-    settingParagraph("Hero caption keywords to swap in", settings.hero_caption_keywords.join(", ")),
+    settingParagraph("Hero image file name (SEO keyword string)", settings.hero_file_name),
     settingParagraph("Image file name prefix", settings.image_file_prefix),
     settingParagraph("Excerpt", settings.excerpt),
     settingParagraph("Post URL", settings.url_slug),

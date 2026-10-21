@@ -5,6 +5,7 @@ import { WeddingDetailsSchema, type WeddingDetailsInput } from "../../contracts.
 import {
   assembleBlogOutput,
   buildCredits,
+  buildHeroFileName,
   buildIntroCredit,
   buildKeywordLine,
   buildPostTitle,
@@ -57,7 +58,7 @@ function generated(overrides: Partial<GeneratedPost> = {}): GeneratedPost {
     seo_description:
       "Elisha & Thomas’s refined Catholic wedding at St. Augustine Catholic Church & Student Center in Gainesville, FL, followed by whimsical Jane Austen-inspired bridal party portraits and a joyful reception at the historic Thomas Center. A traditional Catholic mass ceremony, choreographed first dance, and heartfelt toasts. View their wedding photography and video here!",
     hero_alt_text: "Elisha and Thomas among the columns of the Thomas Center",
-    hero_caption_keywords: ["Catholic church wedding", "Jane Austen inspired wedding"],
+    venue_type_term: "historic",
     tags: ["chapel wedding", "elegant wedding", "historic wedding venue"],
     region_guess: "none",
     ...overrides
@@ -92,7 +93,9 @@ describe("house style: Elisha & Thomas (church ceremony, separate reception)", (
     expect(output.settings.categories).toEqual(["Recent Weddings", "Michael K", "Austin"]);
     expect(output.settings.excerpt.endsWith("View their full wedding photography and videography gallery here!")).toBe(true);
     expect(output.settings.tags).toEqual(expect.arrayContaining(["wedding", "real wedding", "wedding photography", "wedding videography", "thomas center"]));
-    expect(output.settings.hero_caption_keywords).toEqual(expect.arrayContaining(["Gainesville", "Central Florida"]));
+    expect(output.settings.hero_file_name).toBe(
+      "Classic elegant traditional wedding at St. Augustine Catholic Church & Student Center with a wedding reception at Thomas Center in Gainesville, FL – wedding photographer Clermont Winter Garden Apopka Winter Park Orlando Gainesville Central Florida – best affordable wedding venues Orlando – unique wedding venues in Central Florida – micro wedding venues in Orlando – historic wedding venues Orlando Central Florida – best wedding photographer Orlando – Author Made affordable wedding photographer videographer near me – best Orlando wedding photographer near me"
+    );
     expect(output.kids_note).toBeUndefined();
   });
 });
@@ -250,5 +253,14 @@ describe("house style lint: Amy's comments as regression tests", () => {
 
   it("passes a draft that follows the house style", () => {
     expect(lintGeneratedPost(generated(), elishaThomas, "Father Nigel blessed them. Jane Austen inspired the portraits.").issues).toEqual([]);
+  });
+});
+
+describe("house style: hero image keyword string", () => {
+  it("reproduces the published Irelis & Dillon hero file name", () => {
+    const facts = factsFor({ partnerOne: "Irelis", partnerTwo: "Dillon", ceremonyVenue: { name: "Baughman Center" }, city: "Gainesville" });
+    expect(buildHeroFileName(facts, { keyword_phrase: "Classic elegant church indoor chapel wedding", venue_type_term: "outdoor" })).toBe(
+      "Classic elegant church indoor chapel wedding at Baughman Center in Gainesville, FL – wedding photographer Clermont Winter Garden Apopka Winter Park Orlando Gainesville Central Florida – best affordable wedding venues Orlando – unique wedding venues in Central Florida – micro wedding venues in Orlando – outdoor wedding venues Orlando Central Florida – best wedding photographer Orlando – Author Made affordable wedding photographer videographer near me – best Orlando wedding photographer near me"
+    );
   });
 });

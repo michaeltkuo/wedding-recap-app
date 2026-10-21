@@ -79,7 +79,7 @@ const OUTPUT_SHAPE = `{
   "closing": string,               // one paragraph, starts "Congratulations again, …!"
   "seo_description": string,       // ${SEO_DESCRIPTION_MIN_CHARS}-${SEO_DESCRIPTION_MAX_CHARS} characters
   "hero_alt_text": string,         // one plain sentence describing a likely hero image
-  "hero_caption_keywords": [string], // style and venue-type search terms for the hidden hero caption
+  "venue_type_term": string,       // 1-3 words for "[___] wedding venues Orlando Central Florida" in the hero image keywords, e.g. "historic home", "garden", "church"
   "tags": [string],                // 5-12 lowercase tags, preferring the existing list
   "region_guess": ${[...REGION_IDS, "none"].map((id) => `"${id}"`).join(" | ")}  // only used when the city isn't in our region table
 }`;

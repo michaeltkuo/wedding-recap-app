@@ -22,7 +22,7 @@ export const GeneratedPostSchema = z.object({
   closing: z.string().trim().min(1),
   seo_description: z.string().trim().min(1),
   hero_alt_text: z.string().trim().min(1),
-  hero_caption_keywords: z.array(z.string().trim().min(1)).default([]),
+  venue_type_term: z.string().trim().min(1).default("unique"),
   tags: z.array(z.string().trim().min(1)).default([]),
   region_guess: z.enum([...REGION_IDS, "none"]).default("none")
 });

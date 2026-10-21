@@ -20,6 +20,23 @@ export function galleryCallToAction(hasVideo: boolean) {
   return hasVideo ? "View their full wedding photography and videography gallery here!" : "View their full wedding photography gallery here!";
 }
 
+// The hero image's file name carries Amy's long SEO keyword string (published posts show it in the image URL).
+// Only the lead, the city list, and the venue type change per wedding; the rest is copied verbatim.
+export const HERO_KEYWORD_CITIES = ["Clermont", "Winter Garden", "Apopka", "Winter Park", "Orlando", "Gainesville"];
+
+export function heroKeywordTail(cities: string[], venueType: string) {
+  return [
+    `wedding photographer ${cities.join(" ")} Central Florida`,
+    "best affordable wedding venues Orlando",
+    "unique wedding venues in Central Florida",
+    "micro wedding venues in Orlando",
+    `${venueType} wedding venues Orlando Central Florida`,
+    "best wedding photographer Orlando",
+    "Author Made affordable wedding photographer videographer near me",
+    "best Orlando wedding photographer near me"
+  ].join(" – ");
+}
+
 export const EVENT_TYPES = ["wedding", "micro wedding", "elopement", "courthouse elopement", "vow renewal", "wedding reception"] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

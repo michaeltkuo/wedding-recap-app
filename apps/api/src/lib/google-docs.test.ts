@@ -32,7 +32,7 @@ const blogOutput: BlogOutput = {
     categories: ["Recent Weddings", "Kelly", "Michael K"],
     tags: ["wedding", "villa festa"],
     hero_alt_text: "Nicole and Jeff under an umbrella",
-    hero_caption_keywords: ["historic home wedding", "DeLand"],
+    hero_file_name: "Outdoor wedding at historic home wedding venue Villa Festa in DeLand, FL – wedding photographer DeLand",
     image_file_prefix: "nicole-jeff-villa-festa-author-made-photo"
   },
   review_flags: ["Confirm the vendor list."]
