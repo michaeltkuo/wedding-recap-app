@@ -17,7 +17,7 @@ The comments read as harsh ("heavens no", "absolutely not", "oh dear. what is th
 
 So coverage worked. The negative reaction comes from three other things:
 
-1. **About 40% of the doc was noise she had to strike through**: meta description, outline, image slugs, internal links, alt text, and a titled reflection section. We generated deliverables she never uses.
+1. **About 40% of the doc was noise she had to strike through**: meta description, outline, image slugs, internal links, alt text, and a titled reflection section. Most of these are deliverables she never uses. (Correction after the Squarespace walkthrough: she *does* need an SEO description and hero alt text, just not in the form we produced. See section 4.)
 2. **The house format was wrong everywhere it's visible**: title, SEO string, intro credit line, heading case, URL slug, outro, vendor list.
 3. **The voice was generic AI-editorial**, written from nobody's point of view, when it should be Author Made speaking as "we". Examples: "a tapestry of…", "stands as a testament to…", "woven with intention and grace", "revelry" (her comment: "what is this, the 1810s?!").
 
@@ -30,7 +30,7 @@ Points 1 and 2 are deterministic and cheap to fix. Point 3 is the real prompt an
 | # | Where | Comment (paraphrased) | Type | Actionable? |
 |---|---|---|---|---|
 | 1 | Title | Use our format: `[Bride] & [Groom]'s [adj] [adj] wedding at [venue] in [city], FL`. Capitalize proper nouns only. | House format | **Yes, rule** |
-| 2 | Meta description | "oh dear. what is this" | Remove section | **Yes, delete** |
+| 2 | Meta description | "oh dear. what is this" | Wrong wording/placement | **Yes, rewrite.** The walkthrough shows she writes an SEO description herself and would hand it off (section 4) |
 | 3 | Outline | "absolutely not" | Remove section | **Yes, delete** |
 | 4 | SEO string | Template: `[2–4 SEO adjectives] Wedding [at VENUE; omit if church/no venue] in [CITY], FL \| Orlando Wedding Photographer & Videographer` | House format | **Yes, template** |
 | 5 | Italic intro | "YOU NEED TO CHANGE THIS. I don't know who shot this wedding." Template: `Author Made [role] [NAME] with team videographer [NAME] captured this [1–2 adj] wedding at [VENUE] in [CITY], [REGION]` | House format + **missing input** | **Yes, but needs new intake data** |
@@ -51,64 +51,119 @@ Points 1 and 2 are deterministic and cheap to fix. Point 3 is the real prompt an
 
 | Symptom | Root cause | Location |
 |---|---|---|
-| Meta, outline, slugs, internal links, alt text | We designed the output as a generic "SEO blog package". The prompt and schema require these fields, and the doc template prints them. | `BlogOutputSchema` in `packages/contracts/src/index.ts`; `buildSeoBriefPrompt` in `apps/api/src/lib/pipeline.ts`; `formatBlogOutput` in `apps/api/src/lib/google-docs.ts` |
+| Meta, outline, slugs, internal links, alt text | We designed the output as a generic "SEO blog package" instead of around the fields she actually fills in Squarespace. The prompt and schema require these fields, and the doc template prints them. | `BlogOutputSchema` in `packages/contracts/src/index.ts`; `buildSeoBriefPrompt` in `apps/api/src/lib/pipeline.ts`; `formatBlogOutput` in `apps/api/src/lib/google-docs.ts` |
 | Wrong title / heading style | The prompt never states house rules. `validateBlogTitle` only checks that names and venue appear. | `pipeline.ts`, `contracts/index.ts:196` |
 | "Who shot this?" | The app never collects team members, roles, whether there was video, or the region. | `RecapSchema` has no such fields |
 | "Catholic church" instead of the parish's name | The follow-up logic only asks about couple, venue, and city, using a regex for literal `couple:`/`venue:` labels in the transcript. It never asks for a specific church name. | `followUpPrompts` in `pipeline.ts` |
 | Thin storytelling, no anecdotes or quotes | **The generator never sees the transcript.** It only gets the extracted `Recap` JSON (`signature_moments[]`, `portrait_notes`, …), even though the prompt labels it "Transcript facts". Extraction at temperature 0 boils anecdotes down to noun phrases, so jokes, quotes, and "we suggested the yard" are lost before writing starts. | `generateBlogOutputWithAI(recap)` in `pipeline.ts` |
 | Overwrought vocabulary | The prompt asks for "premium, cinematic, editorial" writing and also forbids inventing emotional beats. With no specifics to work with, the model fills space with adjectives. 1,000–1,800 words is also about twice the length of Amy's version (~800). | `buildEditorialArticlePrompt` |
 | No "we" voice | The prompt never says who is narrating. | same |
+| She has to fix formatting after pasting ("my formatting didn't carry over… too many spaces… highlight that heading three") | The doc is written as one plain-text `insertText`: no Heading 3 styles, no italic intro, extra blank lines. | `publishGoogleDoc` / `formatBlogOutput` in `google-docs.ts` |
 | No couple backstory | That information isn't in a day-of field recap at all. It lives in client questionnaires and inquiry emails. | intake gap |
 
 ---
 
-## 4. Recommendations
+## 4. What the Squarespace walkthrough adds (Oct 14 recording)
 
-### Tier 1: format fixes (small, can ship now)
-1. **Remove** meta description, H2 outline, image slugs, internal links, alt text, and the closing reflection section from the schema, prompt, and doc.
-2. **Change the doc layout to match how Amy works:**
-   ```
-   Blog post title
-   SEO string (lives under the hero image)
-   Italic intro (credit line)
-   Opening: the couple's story
-   3–4 sections (sentence-case headings, no colons)
-   Outro (no heading): "Congratulations again, …!"
-   Vendors (team first, by name; then vendors with website links)
-   URL slug
-   ```
-3. **Build the fixed templates in code, not with the LLM.** The model only supplies the adjectives. Code assembles the title, SEO string, intro credit, and slug from structured fields, so they can't drift.
-4. **Add validators** that reject and retry a draft when it has title case, a `:` in a heading, a banned word, or a title that doesn't match the pattern.
+Source: [`2026-10-squarespace-walkthrough-transcript.txt`](2026-10-squarespace-walkthrough-transcript.txt). It's an auto-transcript, so expect mistakes ("Arthur made" = Author Made, "Pixi set" = Pixieset, "Dunadin" = Dunedin, "cloud" = Claude).
 
-### Tier 2: inputs (needed for the intro and the storytelling)
-5. **Add a short structured intake** before or after recording. Most of these could be prefilled from the booking/CRM record:
-   - Team on the day: lead (Michael = "creative lead and co-owner"; others = "team photographer NAME"), videographer, video yes/no
-   - Ceremony venue's proper name, reception venue, city, region (Orlando / Central Florida / Tampa / …)
-   - Couple story: how they met, why this venue, fun facts, a quote if possible
-   - Vendor list
-6. **Replace the field-checking follow-ups with story prompts** shown before the photographer sends the recap. For example: "Anything funny or touching someone said in a speech?", "Anything you did behind the scenes, like moving a shot or a lighting call?", "One moment you'd show a future client?" These are the beats Amy added by hand.
+### Her process, step by step
+| # | Step in Squarespace | What she does | What the app could supply |
+|---|---|---|---|
+| 1 | Duplicate the latest post | Copies the most recent post as a template and renames it right away so she doesn't overwrite the live one | — |
+| 2 | **Post title** | `Bride & Groom's adj adj wedding at Venue in City, FL`. Adjectives are creative and lowercase; check past posts for ideas | Title (assembled in code) |
+| 3 | **Keyword line under the hero** | Keyword-heavy, "less artistic": `Historic chapel micro wedding at Historic Andrews Chapel, Dunedin, FL \| Orlando wedding photographer`. Avoid repeated words ("I have historic twice… I would change that") | SEO string, with a check for repeated words |
+| 4 | **Italic intro / credits** | Roles change per wedding. If one person shot it, name just that person. Michael = "creative lead and co-owner"; others are team photographer, videographer, or assistant. Ends with a **larger geographic keyword**, and she often isn't sure which one ("I don't actually know what Dunedin is… we're going to say it's by Tampa") | Credit line from team data, plus an **automatic city→region lookup** |
+| 5 | **Paste body copy** | Pastes from the Google Doc, then fixes spacing and sets every heading to **Heading 3** by hand | **A paste-ready doc**: H3 headings, italic intro, single spacing |
+| 6 | **Vendors** | Logistics sheets and galleries only have Instagram handles. She replaces them with **website links** | Vendor list with website URLs (handles kept as a fallback) |
+| 7 | **Kids note** | If children featured meaningfully, she keeps a special note string at the bottom (copied from a post like Nicole & Jeff's); otherwise she deletes it | Flag "children featured", then include the standard note |
+| 8 | Gallery | Picks 40–80 images from Pixieset by gut feel, mixing vertical and horizontal. Design settings: crop off, 2 per row. Squarespace scrambles the upload order, so she re-sorts into chronological order over several passes (Cmd-select, never Shift) | Out of scope for now; possible later win (see Tier 5) |
+| 9 | **Hero image** | Replaces the hero. Edits the **hidden caption keyword string** from the previous post for this wedding: style words, venue, city, region; removes wrong ones like "Disney". Also sets the **hero file name and alt text** | Edited caption string (needs her master string), plus one hero file name and one alt text |
+| 10 | Asset folder | Moves the uploads into a `Photos/<Couple>` folder | — |
+| 11 | **Featured image + excerpt** | Excerpt = the intro text + "View their full wedding photography and videography gallery here" | Excerpt text |
+| 12 | **URL slug** | `bride-groom-[SEO adjectives]-wedding-[venue]-[city]-fl`. Uses only **SEO-useful adjectives** (intimate, micro, garden, museum; not "heartfelt"), and drops "at" and "in". Example: `brylin-william-intimate-wedding-historic-andrews-chapel-dunedin-fl` | Slug (code) |
+| 13 | **Tags** | Reviews the tags carried over from the template: removes wrong ones (Disney, garden) and adds missing ones (chapel wedding, historic wedding venue). "It's not science" | Suggested tags to add/remove, from the venue type and style |
+| 14 | **Categories** | "Recent Weddings" + the **names of team members who shot it** (Rob, Michael, Maddie, Austin, Kelly) | Categories from team data |
+| 15 | **SEO title + SEO description** | Title filled close to the character limit, adding things like "\| Orlando wedding photographer" when there's room. **She writes the description herself** ("this is added work. You could have Claude write this"): readable but keyword-dense, close to the max limit | **SEO title + SEO description in her style** (biggest time-saver she named) |
+| 16 | Social image, publish | Sets the social image and usually publishes right away | — |
 
-### Tier 3: generation quality (the actual storytelling fix)
-7. **Pass the full transcript to the generator** alongside the structured recap, so it can quote and paraphrase anecdotes. Extraction should also pull `anecdotes[]`, `quotes[]`, and `behind_the_scenes[]` as their own fields.
-8. **Write in the Author Made voice:** first-person plural ("we snuck away with the bridal party…"), warm, conversational, with occasional parentheticals and exclamation points, and plain modern vocabulary.
-9. **Use Amy's rewrite as a few-shot example** in the prompt. Over time, collect 3–5 published posts as reference examples.
-10. **Target about 700–1,000 words**, not 1,000–1,800.
-
-### Tier 4: feedback loop
-11. **Turn this doc into an eval fixture.** Format rules become automated checks. Voice and storytelling get scored against a short rubric with Amy's version as the reference.
-12. **Collect Amy's rules automatically.** She already writes comments addressed to Claude ("tell Claude:", "To Claude:"). The app could read those comments through the Drive API and suggest additions to a versioned house-style file, so feedback builds up instead of being lost after each doc.
-13. **Get the Squarespace recording** before building any SEO or publishing automation. Her actual workflow (one hidden SEO caption on the hero image, vendor block format) should define the output.
+### What this changes in the earlier analysis
+1. **Don't delete the SEO description; fix it.** Her "oh dear" was about a generic marketing blurb at the top of the doc. She does write an SEO description in Squarespace, finds it tedious, and said Claude could write it. It belongs in a settings section at the bottom of the doc, written keyword-dense and to Squarespace's character limits.
+2. **Alt text and file names: hero image only.** Not per image.
+3. **Slug question answered.** The slug uses SEO adjectives, not the creative title adjectives. So the model needs to return two adjective sets: creative ones for the title and SEO ones for the slug and keyword strings.
+4. **Region question answered, as a product need.** Amy doesn't reliably know which region a city belongs to, so the app should look it up (Dunedin → Tampa; Gainesville → ?) instead of asking her.
+5. **Team data now affects four fields**: the intro credit, categories, the vendor list, and, through the role, the wording.
+6. **The doc should be laid out in the order she works through Squarespace**, so she can go top to bottom copying fields.
+7. **Formatting after pasting is real wasted time.** That makes doc styling (H3 headings, italics, spacing) a Tier 1 fix.
+8. **Auto-publishing to Squarespace isn't the goal.** As far as I know Squarespace has no supported API for creating blog posts, and the gallery work is manual anyway. The realistic target is a doc that's ready to paste, field by field.
 
 ---
 
-## 5. Draft v2 house style + prompt
+## 5. Revised plan
+
+Same principle as before: the model writes the prose, and code assembles every templated field.
+
+### Target output: a "paste sheet" Google Doc, in Squarespace order
+```
+POST TITLE            Elisha & Thomas's refined [adj] wedding at [Church] and Thomas Center in Gainesville, FL
+KEYWORD LINE          Classic Catholic church wedding in Gainesville, FL | Orlando wedding photographer & videographer
+INTRO (italic)        Author Made creative lead and co-owner Michael with team videographer … captured this … wedding at … in Gainesville, [region].
+BODY                  opening (couple story) → 3–4 sections, Heading 3, sentence case → outro "Congratulations again…"
+VENDORS               team first (names) → vendors linked to their websites
+KIDS NOTE             only if children featured
+— SQUARESPACE SETTINGS —
+Hero caption (hidden) [edited master keyword string]
+Hero file name / alt  [one each]
+Excerpt               [intro] View their full wedding photography and videography gallery here
+URL slug              elisha-thomas-[seo-adjs]-wedding-[venue]-gainesville-fl
+Tags                  add: … / remove: …
+Categories            Recent Weddings, Michael, …
+SEO title             [≤ limit]
+SEO description       [≤ limit, keyword-dense but readable]
+```
+
+### Phase 0: inputs to collect before building (no code)
+- Amy's **master hero caption string** (copy it from any live post)
+- The **kids note** string (from Nicole & Jeff's post)
+- The current **tag list** and team **category names**
+- **Squarespace character limits** for the SEO title and description (from the counter in the settings panel)
+- **City→region table**: which region keywords she uses (Orlando, Central Florida, Tampa, …) and which cities map to each
+- 3–5 **published posts** as voice and title examples
+- Where team assignments and vendor lists live today (logistics sheet? Asana?), so we can prefill them
+
+### Phase 1: output format (no prompt changes needed)
+1. Change the schema and doc to the paste-sheet layout above. Drop the outline, image slugs, internal links, per-image alt text, and the titled reflection section.
+2. Write the doc with real styles: H3 headings, italic intro, single spacing, and bold labels for the settings section.
+3. Assemble the templated fields in code: title, keyword line, intro, slug, excerpt, categories, kids note, and the region lookup.
+4. Add validators: sentence case, no colons in headings, no repeated words in the keyword line, SEO fields within their character limits, and the title pattern.
+
+### Phase 2: intake
+5. Add structured fields, prefilled where possible: team and roles, video yes/no, proper venue names, children featured, vendors (handles → websites), couple story and a quote.
+6. Add story-prompt follow-ups (speech moments, behind-the-scenes calls, the moment you'd show a client).
+
+### Phase 3: prompt and generation (this is where the prompts change, once you approve)
+7. Pass the full transcript to the writing step. Extraction also pulls anecdotes, quotes, and behind-the-scenes moments.
+8. Write in the "we" voice with a banned-word list and Amy's rewrite as an example. Target 700–1,000 words.
+9. The model returns: the prose, creative title adjectives, SEO adjectives, the SEO description, hero alt text, and tag suggestions.
+
+### Phase 4: feedback loop
+10. Make this doc an eval fixture: format rules as automatic checks, voice scored against a rubric.
+11. Collect Amy's "To Claude:" comments into a versioned house-style file.
+
+### Tier 5: later, if it's worth it
+- **Gallery ordering**: she re-sorts photos several times per post. An exporter that renames the selected Pixieset images by capture time might make Squarespace keep chronological order. This depends on how Squarespace actually orders uploads, which needs testing.
+- **Vendor website lookup** from Instagram handles.
+
+---
+
+## 6. Draft v2 prompt (proposal only, not applied)
 
 ```text
 You are writing a real wedding blog post for Author Made, a photo + video studio
 based in Orlando, FL. You write AS the Author Made team ("we").
 
 INPUTS
-- STRUCTURED FACTS: {recap JSON — couple, venues, team, region, vendors}
+- STRUCTURED FACTS: {recap JSON — couple, venues, team, region, vendors, children_featured}
 - COUPLE STORY: {how they met, why this venue, fun facts, quotes — may be empty}
 - FIELD RECAP TRANSCRIPT: {full transcript from the photographer, verbatim}
 
@@ -128,39 +183,33 @@ STRUCTURE
    If no couple story is provided, open on the most specific moment of the morning.
 2. 3–4 sections following the day (getting ready, ceremony, portraits, reception —
    skip any with no material). Each has a heading.
-3. Final paragraph (no heading): a short note that ends with "Congratulations again, [Bride] & [Groom]!"
+3. Final paragraph (no heading) ending with "Congratulations again, [Bride] & [Groom]!"
    plus one warm line.
 
 HEADINGS
 - Sentence case: capitalize only the first word and proper nouns.
 - One phrase. No colons, dashes, or two-part "X: Y" headings.
-- Plain and specific, e.g. "A bright, cheerful morning at home".
 
 LENGTH: 700–1,000 words of body copy.
 
 ALSO RETURN
-- title_adjectives: [primary, secondary] for "[Bride] & [Groom]'s [adj] [adj] wedding…"
-  (distinctive and based on the wedding's look and feel; avoid "beautiful", "magical")
-- seo_adjectives: 2–4 search-friendly adjectives for the SEO string
-- intro_adjectives: 1–2 adjectives for the credit line
+- title_adjectives: [2] creative, lowercase, based on the wedding's look and feel (for the post title)
+- seo_adjectives: [2–4] search terms people actually type (intimate, micro, chapel, garden, museum, Catholic…)
+  for the keyword line, slug, and hero caption
+- intro_adjectives: [1–2] for the credit line
+- seo_description: readable, keyword-dense, ≤ {limit} characters
+- hero_alt_text: one sentence
+- tag_suggestions: { add: [], remove: [] } against {current tag list}
 
-Return JSON: { title_adjectives, seo_adjectives, intro_adjectives,
-  opening, sections: [{heading, body}], closing }
+Return JSON only.
 ```
-
-Code then assembles (deterministic):
-- **Title:** `{Bride} & {Groom}'s {adj1} {adj2} wedding at {venue(s)} in {city}, FL`
-- **SEO string:** `{SEO Adjs} Wedding[ at {venue} unless church/none] in {City}, FL | Orlando Wedding Photographer & Videographer`
-- **Intro:** `Author Made {lead role+name}[ with team videographer {name}] captured this {adj} wedding at {venue} in {city}, {region}.` (Don't repeat "Orlando" when the city is Orlando.)
-- **Slug:** `bride-groom-adj1-adj2-wedding-venue-city-fl`
-- **Vendors:** team first (names only), then vendors linked to their websites.
 
 ---
 
-## 6. Open questions for Amy / Michael
+## 7. Open questions for Amy / Michael
 - Who shot Elisha & Thomas (photo lead, second shooter, videographer)? What is the church's proper name?
-- Region list: Gainesville isn't Orlando, Central Florida, or Tampa. What should it be ("North Central Florida"? "Gainesville, FL" alone)?
-- Can we get 3–5 past post titles and full posts to use as adjective and voice references?
-- Can we get the master SEO caption string she copies between posts? We could prefill the keyword swaps.
-- Where does couple backstory live today (questionnaire, inquiry form, Asana)? Could it be pulled in automatically?
-- Note: Amy's slug example (`…refined-catholic-church-wedding-gainesville-fl`) doesn't quite follow her own pattern, which has two title adjectives and then the venue. We should confirm the rule for church weddings.
+- What is Gainesville's region keyword? (Dunedin was "by Tampa".) Which region keywords exist?
+- Can we get the master hero caption string, the kids note string, and the tag list? (Phase 0)
+- What are the exact SEO title and description character limits she sees in Squarespace?
+- Where do team assignments, vendor lists, and couple backstory live today (logistics sheet, questionnaire, Asana)? Could the app read them directly?
+- Her two slug examples differ slightly: `elisha-thomas-refined-catholic-church-wedding-gainesville-fl` (no venue name) vs `brylin-william-intimate-wedding-historic-andrews-chapel-dunedin-fl` (venue name). Is the rule "omit the venue for church weddings", like the keyword line?
