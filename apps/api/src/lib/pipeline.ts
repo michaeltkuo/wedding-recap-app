@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 
 import {
-  BlogOutputSchema,
   buildObjectKey,
   PipelineStartRequestSchema,
   RecapSchema,
@@ -10,19 +9,35 @@ import {
   SignUploadRequestSchema,
   SignUploadResponseSchema,
   TranscriptSchema,
-  validateBlogTitle,
+  WeddingDetailsSchema,
   type BlogOutput,
   type FollowUp,
   type PipelineStartRequest,
   type Recap,
   type SessionResult,
   type SignUploadRequest,
-  type Transcript
+  type Transcript,
+  type WeddingDetails
 } from "../contracts.js";
 
 import { API_CONFIG } from "../config.js";
 import { canPublishToGoogleDocs, publishGoogleDoc } from "./google-docs.js";
+import {
+  GeneratedPostSchema,
+  assembleBlogOutput,
+  lintGeneratedPost,
+  resolvePostFacts,
+  type GeneratedPost,
+  type PostFacts
+} from "./house-style/index.js";
 import { MetricsRegistry } from "./metrics.js";
+import {
+  EXTRACTION_JSON_SCHEMA,
+  EXTRACTION_SYSTEM_PROMPT,
+  buildGenerationPrompt,
+  buildGenerationSystemPrompt,
+  buildRevisionPrompt
+} from "./prompts.js";
 import { transitionStage } from "./session-machine.js";
 import { sessionStore } from "./store.js";
 
@@ -49,7 +64,7 @@ function extensionForMimeType(mimeType: string) {
 }
 
 type OpenAiMessage = {
-  role: "system" | "user";
+  role: "system" | "user" | "assistant";
   content: string;
 };
 
@@ -108,52 +123,13 @@ async function extractRecapWithModel(transcriptText: string) {
         type: "json_schema",
         json_schema: {
           name: "recap",
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              couple_names: { type: "string" },
-              venue_name: { type: "string" },
-              venue_city_state: { type: "string" },
-              wedding_style: { type: "string" },
-              timeline_summary: { type: "string" },
-              signature_moments: {
-                type: "array",
-                items: { type: "string" },
-                minItems: 1
-              },
-              portrait_notes: { type: "string" },
-              weather_notes: { type: "string" },
-              vendor_notes: {
-                type: "array",
-                items: { type: "string" }
-              },
-              cultural_traditions: {
-                type: "array",
-                items: { type: "string" }
-              },
-              reception_highlights: {
-                type: "array",
-                items: { type: "string" }
-              }
-            },
-            required: [
-              "couple_names",
-              "venue_name",
-              "venue_city_state",
-              "wedding_style",
-              "timeline_summary",
-              "signature_moments",
-              "portrait_notes",
-              "weather_notes"
-            ]
-          }
+          schema: EXTRACTION_JSON_SCHEMA
         }
       },
       messages: [
         {
           role: "system",
-          content: "Extract a wedding recap object from transcript text. Return only factual fields from the transcript."
+          content: EXTRACTION_SYSTEM_PROMPT
         } satisfies OpenAiMessage,
         {
           role: "user",
@@ -273,75 +249,7 @@ function extractJsonFromModelContent(content: string) {
   return trimmed;
 }
 
-function buildEditorialArticlePrompt(recap: Recap) {
-  return `You are writing a real wedding recap for a premium editorial wedding blog. Use only the facts present in the transcript and do not invent details. If the transcript is sparse, shape a concise but elegant feature from the actual details available rather than forcing missing story beats.
-
-Transcript facts:
-${JSON.stringify(recap, null, 2)}
-
-ARTICLE OBJECTIVE
-- Write a blog post that feels premium, warm, intimate, and editorial.
-- Aim for 1000-1800 words when details support it; if details are compact, write a thoughtful shorter feature instead of inventing unsupported narrative beats.
-- Keep the piece grounded in the real wedding details with a refined, cinematic, story-driven editorial voice.
-
-ARTICLE STYLE RULES
-- Use polished, naturally conversational editorial language.
-- Focus on emotional rhythm, venue character, meaningful moments, and the couple's personality.
-- Avoid generic filler, vague praise, or repetitive template language.
-- Use a narrative arc: opening atmosphere, ceremony, portraits, and closing reflection. Include reception only when supported by facts.
-- Do not invent vendors, decor, emotional beats, or story details not present in transcript facts.`;
-}
-
-function buildSeoBriefPrompt(recap: Recap) {
-  return `SEO BRIEF (STRICT)
-Use the following SEO intent and taxonomy constraints for metadata and internal linking suggestions.
-
-Search intent goal:
-- Optimize for wedding story + venue + location + service intent.
-- Strong entity pattern: [couple names] at [venue] in [city, state] wedding photography and videography.
-
-Search intent rules:
-- The title, meta description, H2 outline, slugs, alt text, and internal links should reinforce real search intent.
-- Favor actual venue names, city/state names, and relevant service terminology.
-- Keep language readable first and search-aware second.
-- Do not keyword-stuff or force terms unnaturally.
-
-Internal linking rules:
-- Recommend only internal pages that logically match the story and brand taxonomy.
-- Do not suggest unrelated pages.
-
-Transcript facts:
-${JSON.stringify(recap, null, 2)}
-
-SEO OUTPUT CONSTRAINTS
-- The primary title must include couple names, venue name, and city/state.
-- recommended_image_slugs should be derived from venue, city, and couple names.
-- internal_link_suggestions should be human-sensible and content-relevant.
-- alt_text_suggestions should reflect actual wedding story and location.`;
-}
-
-async function generateBlogOutputWithAI(recap: Recap) {
-  const prompt = `${buildEditorialArticlePrompt(recap)}
-
-${buildSeoBriefPrompt(recap)}
-
-FINAL OUTPUT REQUIREMENTS
-- Return valid JSON only.
-- Use exactly this structure:
-  {
-    "primary_title": string,
-    "meta_description": string,
-    "h2_outline": [string, string, string, string, string],
-    "section_blocks": [{ "heading": string, "body": string }],
-    "recommended_image_slugs": [string],
-    "internal_link_suggestions": [string],
-    "alt_text_suggestions": [string]
-  }
-- Use 4-5 H2 headings and 4-5 section blocks depending on available facts.
-- Keep total article depth substantial when transcript detail supports it.
-- Do not include markdown fences.
-- Do not add unsupported details.`;
-
+async function requestGeneratedPost(messages: OpenAiMessage[]) {
   const response = await callOpenAi("chat/completions", {
     method: "POST",
     headers: {
@@ -351,16 +259,7 @@ FINAL OUTPUT REQUIREMENTS
       model: API_CONFIG.openai.generationModel,
       temperature: 0.7,
       response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "You write polished editorial wedding blog posts from real wedding facts. Output valid JSON only."
-        } satisfies OpenAiMessage,
-        {
-          role: "user",
-          content: prompt
-        } satisfies OpenAiMessage
-      ]
+      messages
     })
   });
 
@@ -368,24 +267,76 @@ FINAL OUTPUT REQUIREMENTS
     choices?: Array<{ message?: { content?: string } }>;
   };
   const modelText = payload.choices?.[0]?.message?.content ?? "";
-  const jsonText = extractJsonFromModelContent(modelText);
-  const parsed = JSON.parse(jsonText) as unknown;
-  const output = BlogOutputSchema.parse(parsed);
-
-  if (!validateBlogTitle(output.primary_title, recap)) {
-    throw new Error("Generated blog title failed validation");
-  }
-
-  return output;
+  return { modelText, post: GeneratedPostSchema.parse(JSON.parse(extractJsonFromModelContent(modelText))) };
 }
 
-async function runGenerationWithRetry(sessionId: string, recap: Recap, simulation?: PipelineStartRequest["simulate"]) {
+// One draft, then one revision if the house-style lint finds problems. Anything still unfixed
+// goes to the doc as a review flag rather than failing the recap.
+async function generateBlogOutputWithAI(facts: PostFacts, recap: Recap, transcript: string) {
+  const messages: OpenAiMessage[] = [
+    { role: "system", content: buildGenerationSystemPrompt() },
+    { role: "user", content: buildGenerationPrompt({ facts, recap, transcript }) }
+  ];
+
+  const draft = await requestGeneratedPost(messages);
+  const draftLint = lintGeneratedPost(draft.post, facts, transcript);
+  if (draftLint.issues.length === 0) {
+    return assembleBlogOutput(facts, draft.post);
+  }
+
+  try {
+    const revision = await requestGeneratedPost([
+      ...messages,
+      { role: "assistant", content: draft.modelText },
+      { role: "user", content: buildRevisionPrompt(draftLint.issues) }
+    ]);
+    const revisionLint = lintGeneratedPost(revision.post, facts, transcript);
+    return assembleBlogOutput(facts, revision.post, revisionLint.issues);
+  } catch {
+    return assembleBlogOutput(facts, draft.post, draftLint.issues);
+  }
+}
+
+// Deterministic stand-in for the model, used by simulated sessions in tests and local demos.
+function simulatedGeneratedPost(facts: PostFacts, recap: Recap): GeneratedPost {
+  const couple = `${facts.partnerOne} & ${facts.partnerTwo}`;
+  return GeneratedPostSchema.parse({
+    title_descriptor: recap.wedding_style.toLowerCase(),
+    event_type: "wedding",
+    keyword_phrase: `${recap.wedding_style} wedding`,
+    intro_descriptor: recap.wedding_style.toLowerCase(),
+    slug_terms: recap.wedding_style,
+    opening: [`${couple}’s day unfolded through ${recap.timeline_summary}.`],
+    sections: [
+      { heading: "Getting ready and the ceremony", paragraphs: [`Standout moments included ${recap.signature_moments.join(", ")}.`] },
+      { heading: "Portraits around the venue", paragraphs: [`${recap.portrait_notes} The weather stayed ${recap.weather_notes.toLowerCase()}.`] },
+      {
+        heading: "An evening with family and friends",
+        paragraphs: [`Reception highlights included ${recap.reception_highlights?.join(", ") ?? "time with family and friends"}.`]
+      }
+    ],
+    closing: `Congratulations again, ${couple}! We wish you so much happiness in the years ahead.`,
+    seo_description: `${couple}’s ${recap.wedding_style} wedding in ${facts.city}, ${facts.state}. View their wedding photography gallery here!`,
+    hero_alt_text: `${couple} on their wedding day in ${facts.city}, ${facts.state}`,
+    venue_type_term: "unique",
+    tags: [`${recap.wedding_style} wedding`]
+  });
+}
+
+async function runGenerationWithRetry(
+  recap: Recap,
+  details: WeddingDetails | undefined,
+  transcript: string,
+  simulation?: PipelineStartRequest["simulate"]
+) {
+  const facts = resolvePostFacts(recap, details);
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       if (simulation) {
-        return buildBlogOutput(recap);
+        const generated = simulatedGeneratedPost(facts, recap);
+        return assembleBlogOutput(facts, generated, lintGeneratedPost(generated, facts, transcript).issues);
       }
-      return await generateBlogOutputWithAI(recap);
+      return await generateBlogOutputWithAI(facts, recap, transcript);
     } catch (error) {
       if (attempt === 2) {
         const reason = error instanceof Error ? error.message : "Unknown generation error";
@@ -395,53 +346,6 @@ async function runGenerationWithRetry(sessionId: string, recap: Recap, simulatio
   }
 
   throw new Error("Generation failed after retries");
-}
-
-function buildBlogOutput(recap: Recap): BlogOutput {
-  const primary_title = `${recap.couple_names} ${recap.wedding_style} Wedding at ${recap.venue_name} ${recap.venue_city_state}`;
-  const output = BlogOutputSchema.parse({
-    primary_title,
-    meta_description: `${recap.couple_names} celebrated a ${recap.wedding_style} wedding at ${recap.venue_name} in ${recap.venue_city_state}, with thoughtful coverage from an Orlando wedding photographer team.`,
-    h2_outline: [
-      "The Wedding Day Setting",
-      "Ceremony Highlights",
-      "Portraits and Venue Moments",
-      "Reception Energy"
-    ],
-    section_blocks: [
-      {
-        heading: "The Wedding Day Setting",
-        body: `${recap.couple_names} chose ${recap.venue_name} in ${recap.venue_city_state} for a ${recap.wedding_style} celebration grounded in real moments.`
-      },
-      {
-        heading: "Ceremony Highlights",
-        body: `The day unfolded through ${recap.timeline_summary} with standout moments like ${recap.signature_moments.join(", ")}.`
-      },
-      {
-        heading: "Portraits and Venue Moments",
-        body: `${recap.portrait_notes} Weather conditions stayed ${recap.weather_notes.toLowerCase()}.`
-      },
-      {
-        heading: "Reception Energy",
-        body: `Reception highlights included ${recap.reception_highlights?.join(", ") ?? "meaningful toasts and a full dance floor"}, keeping the story useful for local SEO and real client context.`
-      }
-    ],
-    recommended_image_slugs: [
-      `${recap.venue_city_state.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${recap.venue_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-wedding`,
-      `${recap.couple_names.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${recap.venue_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-portraits`
-    ],
-    internal_link_suggestions: ["Orlando wedding photography", "Central Florida wedding venues"],
-    alt_text_suggestions: [
-      `${recap.couple_names} at ${recap.venue_name}`,
-      `${recap.venue_name} wedding portraits in ${recap.venue_city_state}`
-    ]
-  });
-
-  if (!validateBlogTitle(output.primary_title, recap)) {
-    throw new Error("Generated blog title failed validation");
-  }
-
-  return output;
 }
 
 async function extractRecapWithRetry(sessionId: string, transcriptText: string, simulation?: PipelineStartRequest["simulate"]) {
@@ -585,7 +489,10 @@ export function runPipeline(request: PipelineStartRequest) {
 
     const nextStage = ["uploaded", "follow_up_required", "error"].includes(existing.stage) ? "transcribing" : existing.stage;
     sessionStore.updateStage(parsed.sessionId, transitionStage(existing.stage, nextStage as SessionResult["stage"]), 25);
-    sessionStore.updateSession(parsed.sessionId, { simulation: parsed.simulate });
+    sessionStore.updateSession(parsed.sessionId, {
+      simulation: parsed.simulate,
+      ...(parsed.details ? { details: WeddingDetailsSchema.parse(parsed.details) } : {})
+    });
 
     return jobQueue.enqueue(parsed.idempotencyKey, async () => {
       try {
@@ -688,7 +595,7 @@ export async function draftSession(sessionId: string) {
     await delay(session.simulation.generationDelayMs);
   }
 
-  const blogOutput = await runGenerationWithRetry(sessionId, session.recap, session.simulation);
+  const blogOutput: BlogOutput = await runGenerationWithRetry(session.recap, session.details, session.transcriptText ?? "", session.simulation);
   const draftMs = Date.now() - draftStart;
   sessionStore.saveBlogOutput(sessionId, blogOutput);
   sessionStore.updateSession(sessionId, {

@@ -23,9 +23,22 @@ Backend (`apps/api`):
 
 Contracts (`packages/contracts`):
 
-- Defines `Transcript`, `Recap`, `BlogOutput`, upload policy, and session result schemas.
-- Defines shared state enums and performance budgets.
-- Provides helper utilities for object key creation and title validation.
+- Defines `Transcript`, `Recap`, `WeddingDetails` (intake), `BlogOutput` (the Squarespace paste sheet), upload policy, and session result schemas.
+- Defines the studio `TEAM_ROSTER`, shared state enums, and performance budgets.
+- Provides helper utilities for object key creation.
+
+## Blog Generation and House Style
+
+The model writes prose and word choices; code builds everything that follows a template.
+
+- `apps/api/src/lib/prompts.ts`: extraction and generation prompts. The generator gets the full transcript, the structured recap, and the intake details.
+- `apps/api/src/lib/house-style/config.ts`: the rules as data (keyword suffix, SEO limits, kids note, banned words, city-to-region table, venue spotlight links, tag vocabulary). Edit this file when a rule changes.
+- `house-style/facts.ts`: merges intake details with the recording and raises review flags for gaps.
+- `house-style/assemble.ts`: builds the title, keyword line, intro credit, credits, slug, categories, SEO title, excerpt, and tags.
+- `house-style/lint.ts`: checks headings (sentence case, no split phrases), banned words, repeated keywords, SEO length, body length, the closing line, and quotes that aren't in the recording. A failing draft gets one revision; anything left goes to the doc as a review flag.
+- `google-docs.ts`: writes the paste sheet in Squarespace order with real Heading 3, italics, and links.
+
+Golden tests in `house-style/house-style.test.ts` pin the output to published posts and to Amy's corrections on the Elisha & Thomas draft.
 
 ## Session State Model
 

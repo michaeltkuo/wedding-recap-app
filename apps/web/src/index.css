@@ -273,6 +273,63 @@ input:focus-visible {
   font-weight: 650;
 }
 
+.post-details {
+  display: grid;
+  gap: 14px;
+}
+
+.post-details fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.post-details legend {
+  margin-bottom: 6px;
+  color: #f4f6f8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.post-details-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.post-details-row .state-field {
+  max-width: 80px;
+}
+
+.post-details .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.post-details .checkbox-label input {
+  padding: 0;
+}
+
+.post-details .team-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.event-editor textarea,
+.event-editor select {
+  min-width: 0;
+  border: 1px solid #4a535c;
+  border-radius: 6px;
+  background: #15181c;
+  color: #f4f6f8;
+  padding: 10px 11px;
+  font: inherit;
+}
+
 .event-editor input {
   min-width: 0;
   border: 1px solid #4a535c;
