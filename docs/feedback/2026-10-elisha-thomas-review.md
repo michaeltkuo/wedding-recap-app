@@ -221,7 +221,7 @@ Return JSON only.
 Answers that came back: Elisha & Thomas was shot by Michael Kuo (photo) and Austin Taft (video); the church is St. Augustine Catholic Church & Student Center; the reception was at the Thomas Center.
 
 Before writing code, we read ~100 published posts from the public Squarespace blog feed, so the rules come from what's actually live:
-- **Church-only weddings name no venue** ("Olivia & Dustin’s traditional church wedding in Deltona, FL"). **Church + reception venue names both** ("…at Saint Augustine Catholic Church & The Yardery in Sanford, FL"). The **URL keeps only the event venue** ("diana-ricardo-traditional-catholic-wedding-outdoor-reception-the-yardery-sanford-fl"). The code follows these rules. Elisha & Thomas's URL therefore keeps `thomas-center`, which differs from Amy's hand-written example; confirm with her.
+- **Church-only weddings name no venue** ("Olivia & Dustin’s traditional church wedding in Deltona, FL"). **Church + reception venue names both** ("…at Saint Augustine Catholic Church & The Yardery in Sanford, FL"). The **URL keeps only the event venue** ("diana-ricardo-traditional-catholic-wedding-outdoor-reception-the-yardery-sanford-fl"). The code follows these rules. Elisha & Thomas's URL therefore keeps `thomas-center`. Michael decided (Oct 21) that event venues stay in the URL for SEO, overriding Amy's hand-written example.
 - **Gainesville:** both published Gainesville posts say "in/near Gainesville, FL" with no larger region, and Gainesville is its own market. The intro follows that precedent, and "Central Florida" goes into the hidden caption keywords and tags. Switching the intro to "Gainesville, Central Florida" is a one-line change in `house-style/config.ts`.
 - **Real strings, not placeholders:** the kids note, vendor credit labels ("Author Made Team Photographer: …"), categories ("Michael K", "Kelly", "Maddie", "Rob", "Austin"), the excerpt call to action, SEO limits (100/400 characters, the max seen across all posts), 17 venue spotlight links, and the existing tag vocabulary.
 
@@ -235,7 +235,7 @@ Before writing code, we read ~100 published posts from the public Squarespace bl
 | Full transcript passed to the generator; extraction keeps anecdotes/quotes/behind-the-scenes | Done | `prompts.ts` |
 | Intake: couple, venues + church checkbox, team roles, kids, couple story, vendors | Done | `apps/web/src/PostDetailsForm.tsx` |
 | Golden tests from published posts and Amy's comments | Done | `house-style.test.ts` |
-| Hero caption master string | **Open.** It's hidden on the live site, so we can't read it. The doc lists keywords to swap in instead. |
+| Hero caption master string | **Open, optional.** Hidden captions aren't in Squarespace's public feed. With one copy pasted in, the app could write the full edited caption instead of a list of keywords to swap in. |
 | Story follow-up questions during review | **Open.** Not built yet; the couple-story fields cover part of it. |
 | Prefill intake from bookings / logistics sheet | **Open.** |
 | Gallery ordering helper | **Open** (later). |
