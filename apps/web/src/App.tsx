@@ -21,6 +21,7 @@ import {
 import type { Recap, SessionResult } from "@wedding/contracts";
 
 import { createSession, getSession, publishSession, signUpload, startPipeline, uploadAudio } from "./api";
+import { PostDetailsForm, emptyPostDetails, toWeddingDetails, type PostDetailsDraft } from "./PostDetailsForm";
 import { transitionUiStage, type UiStage } from "./sessionMachine";
 import { useAudioRecorder } from "./useAudioRecorder";
 
@@ -335,6 +336,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [result, setResult] = useState<SessionResult | null>(null);
   const [eventDetails, setEventDetails] = useState<EventDetails>(defaultEvent);
+  const [postDetails, setPostDetails] = useState<PostDetailsDraft>(emptyPostDetails);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [activeCoverageField, setActiveCoverageField] = useState<CoverageField | null>(null);
@@ -457,7 +459,8 @@ export default function App() {
         sessionId: targetSessionId,
         uploadToken: upload.uploadToken,
         idempotencyKey: `process-${targetSessionId}-${Date.now()}`,
-        ...(transcriptText?.trim() ? { transcriptText } : {})
+        ...(transcriptText?.trim() ? { transcriptText } : {}),
+        details: toWeddingDetails(postDetails)
       };
       await startPipeline(payload);
     } catch (processingError) {
@@ -542,6 +545,18 @@ export default function App() {
       .map((prompt) => `${followUpTranscriptLabels[prompt.field] ?? prompt.field}: ${followUpAnswers[prompt.field]}.`)
       .join(" ");
     await processAudio(capturedAudio, answers, sessionId ?? undefined);
+  }
+
+  function updatePostDetails(next: PostDetailsDraft) {
+    setPostDetails(next);
+    const names = [next.partnerOne.trim(), next.partnerTwo.trim()].filter(Boolean);
+    const venues = [next.ceremonyVenue.trim(), next.receptionVenue.trim()].filter(Boolean);
+    setEventDetails((current) => ({
+      ...current,
+      coupleNames: names.join(" & "),
+      venueName: venues.join(" + "),
+      cityState: next.city.trim() ? `${next.city.trim()}, ${next.state.trim().toUpperCase()}` : ""
+    }));
   }
 
   function startNewRecap() {
@@ -752,10 +767,10 @@ export default function App() {
           <section className="ready-intro">
             <p className="eyebrow">{eventDetails.dateLabel || "No session metadata yet"}</p>
             <h1 id="ready-heading">{eventDetails.coupleNames || "Start a new recap"}</h1>
-            <p className="event-meta"><strong>{eventDetails.venueName || "No client selected yet"}</strong><br />{eventDetails.cityState || "Add names and venue now, or leave it blank and let us infer from your recording."}</p>
+            <p className="event-meta"><strong>{eventDetails.venueName || "No client selected yet"}</strong><br />{eventDetails.cityState || "Add the couple, venues, and team now for a publish-ready post, or leave it blank and let us infer from your recording."}</p>
             <div className="intro-rule" />
             <p>Talk through the day in your own order. Add names and venue now, or let us infer from your recording.</p>
-            {detailsOpen ? <div className="event-editor"><label>Couple names<input value={eventDetails.coupleNames} onChange={(event) => setEventDetails((current) => ({ ...current, coupleNames: event.target.value }))} /></label><label>Venue<input value={eventDetails.venueName} onChange={(event) => setEventDetails((current) => ({ ...current, venueName: event.target.value }))} /></label><label>City and state<input value={eventDetails.cityState} onChange={(event) => setEventDetails((current) => ({ ...current, cityState: event.target.value }))} /></label><button className="text-icon-button" type="button" onClick={() => setDetailsOpen(false)}><Check size={16} />Done</button></div> : null}
+            {detailsOpen ? <div className="event-editor"><PostDetailsForm value={postDetails} onChange={updatePostDetails} /><button className="text-icon-button" type="button" onClick={() => setDetailsOpen(false)}><Check size={16} />Done</button></div> : null}
           </section>
           <section className="record-launch-panel">
             <button className="record-launch" type="button" onClick={() => void startRecording()} disabled={recorder.status === "requesting"}><span><Mic size={32} /><small>New tape</small><strong>{recorder.status === "requesting" ? "Opening mic" : "Record recap"}</strong></span></button>

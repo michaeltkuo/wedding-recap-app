@@ -1,4 +1,4 @@
-import type { GoogleAuthStatus, PipelineStartRequest, SessionResult, SignUploadRequest, SignUploadResponse } from "@wedding/contracts";
+import type { GoogleAuthStatus, PipelineStartRequestInput, SessionResult, SignUploadRequest, SignUploadResponse } from "@wedding/contracts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8787";
 const CONTRACTOR_TOKEN = "demo-contractor-token";
@@ -52,7 +52,7 @@ export async function uploadAudio(uploadUrl: string, audio: Blob) {
   return response.json() as Promise<{ accepted: boolean; sessionId: string }>;
 }
 
-export async function startPipeline(payload: PipelineStartRequest) {
+export async function startPipeline(payload: PipelineStartRequestInput) {
   return apiRequest<{ accepted: boolean; sessionId: string }>("/api/transcriptions", {
     method: "POST",
     body: JSON.stringify(payload)

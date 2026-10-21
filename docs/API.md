@@ -99,12 +99,28 @@ Request:
   "uploadToken": "...",
   "idempotencyKey": "pipeline-...",
   "transcriptText": "couple: ... venue: ... city: ...",
+  "details": {
+    "partnerOne": "Elisha",
+    "partnerTwo": "Thomas",
+    "ceremonyVenue": { "name": "St. Augustine Catholic Church & Student Center", "kind": "house_of_worship" },
+    "receptionVenue": { "name": "Thomas Center" },
+    "city": "Gainesville",
+    "state": "FL",
+    "team": [{ "memberId": "michael-kuo", "role": "photo" }, { "memberId": "austin-taft", "role": "video" }],
+    "childrenFeatured": false,
+    "vendors": [{ "role": "Florals", "name": "Wendy Anne", "url": "https://wendyanne.com/" }],
+    "coupleStory": { "howTheyMet": "...", "whyThisVenue": "...", "funFacts": [], "quotes": [] }
+  },
   "simulate": {
     "extractionMode": "normal",
     "publishMode": "normal"
   }
 }
 ```
+
+`details` is optional and every field in it is optional. It is stored on the session and drives the
+templated blog fields (title, intro credit, credits, categories, slug). Anything missing becomes a
+review flag at the top of the Google Doc instead of a failure.
 
 Success `202`:
 

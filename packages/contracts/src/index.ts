@@ -50,38 +50,107 @@ export const RecapSchema = z.object({
   weather_notes: z.string().min(1),
   vendor_notes: z.array(z.string().min(1)).optional(),
   cultural_traditions: z.array(z.string().min(1)).optional(),
-  reception_highlights: z.array(z.string().min(1)).optional()
+  reception_highlights: z.array(z.string().min(1)).optional(),
+  // Story material the blog needs; extraction keeps these close to the photographer's own words.
+  anecdotes: z.array(z.string().min(1)).optional(),
+  quotes: z.array(z.string().min(1)).optional(),
+  behind_the_scenes: z.array(z.string().min(1)).optional()
+});
+
+// Studio team as it appears on the blog: intro credit, vendor credits, and Squarespace categories.
+export const TEAM_ROSTER = [
+  { id: "michael-kuo", firstName: "Michael", fullName: "Michael Kuo", category: "Michael K", title: "creative lead and co-owner" },
+  { id: "kelly-jazwa", firstName: "Kelly", fullName: "Kelly Jazwa", category: "Kelly" },
+  { id: "maddie-zahn", firstName: "Maddie", fullName: "Maddie Zahn", category: "Maddie" },
+  { id: "rob-shannon", firstName: "Rob", fullName: "Rob Shannon", category: "Rob" },
+  { id: "austin-taft", firstName: "Austin", fullName: "Austin Taft", category: "Austin" }
+] as const;
+
+export type TeamMember = (typeof TEAM_ROSTER)[number];
+export type TeamMemberId = TeamMember["id"];
+
+export const TeamRoleSchema = z.enum(["photo", "video", "assistant"]);
+
+export const TeamAssignmentSchema = z.object({
+  memberId: z.enum(TEAM_ROSTER.map((member) => member.id) as [TeamMemberId, ...TeamMemberId[]]),
+  role: TeamRoleSchema
+});
+
+// A house of worship is handled differently from an event venue in titles, keyword lines, and slugs.
+export const VenueKindSchema = z.enum(["venue", "house_of_worship"]);
+
+export const VenueSchema = z.object({
+  name: z.string().trim().min(1),
+  kind: VenueKindSchema.default("venue"),
+  url: z.string().url().optional()
+});
+
+export const VendorSchema = z.object({
+  role: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  url: z.string().url().optional()
+});
+
+export const CoupleStorySchema = z.object({
+  howTheyMet: z.string().trim().optional(),
+  whyThisVenue: z.string().trim().optional(),
+  funFacts: z.array(z.string().trim().min(1)).default([]),
+  quotes: z.array(z.string().trim().min(1)).default([])
+});
+
+// Intake from the web app. Everything is optional so a recap can still go out; gaps become review flags.
+export const WeddingDetailsSchema = z.object({
+  partnerOne: z.string().trim().min(1).optional(),
+  partnerTwo: z.string().trim().min(1).optional(),
+  ceremonyVenue: VenueSchema.optional(),
+  receptionVenue: VenueSchema.optional(),
+  city: z.string().trim().min(1).optional(),
+  state: z.string().trim().length(2).optional(),
+  team: z.array(TeamAssignmentSchema).default([]),
+  childrenFeatured: z.boolean().default(false),
+  vendors: z.array(VendorSchema).default([]),
+  coupleStory: CoupleStorySchema.optional()
 });
 
 export const BlogSectionSchema = z.object({
-  heading: z.string().min(1),
-  body: z.string().min(1)
+  heading: z.string().trim().min(1),
+  paragraphs: z.array(z.string().trim().min(1)).min(1)
 });
 
-export const BlogOutputSchema = z.object({
-  primary_title: z.string().min(1),
-  meta_description: z.string().min(1),
-  h2_outline: z.array(z.string().min(1)).min(4),
-  section_blocks: z.array(BlogSectionSchema).min(4),
-  recommended_image_slugs: z.array(z.string().min(1)).min(1),
-  internal_link_suggestions: z.array(z.string().min(1)).optional(),
-  alt_text_suggestions: z.array(z.string().min(1)).optional()
-}).superRefine((value, ctx) => {
-  const normalizedTitle = value.primary_title.toLowerCase();
-  if (value.section_blocks.length < 4) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Blog output must contain at least 4 narrative sections"
-    });
-  }
+export const CreditLineSchema = z.object({
+  label: z.string().min(1),
+  name: z.string().min(1),
+  url: z.string().url().optional()
+});
 
-  const titleTokens = normalizedTitle.split(/\s+/);
-  if (titleTokens.length < 4) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Primary title must be descriptive and include multiple tokens"
-    });
-  }
+export const LinkSchema = z.object({
+  text: z.string().min(1),
+  url: z.string().url()
+});
+
+// The Squarespace "paste sheet": body copy in publish order, then the post settings Amy fills by hand.
+export const BlogOutputSchema = z.object({
+  post_title: z.string().min(1),
+  keyword_line: z.string().min(1),
+  intro_credit: z.string().min(1),
+  opening: z.array(z.string().trim().min(1)).min(1),
+  sections: z.array(BlogSectionSchema).min(2).max(6),
+  closing: z.string().trim().min(1),
+  venue_review_link: LinkSchema.extend({ afterSection: z.number().int().min(-1) }).optional(),
+  credits: z.array(CreditLineSchema).min(1),
+  kids_note: z.string().optional(),
+  settings: z.object({
+    excerpt: z.string().min(1),
+    url_slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    seo_title: z.string().min(1),
+    seo_description: z.string().min(1),
+    categories: z.array(z.string().min(1)).min(1),
+    tags: z.array(z.string().min(1)),
+    hero_alt_text: z.string().min(1),
+    hero_caption_keywords: z.array(z.string().min(1)),
+    image_file_prefix: z.string().min(1)
+  }),
+  review_flags: z.array(z.string().min(1)).default([])
 });
 
 export const UploadPolicySchema = z.object({
@@ -119,6 +188,7 @@ export const SessionResultSchema = z.object({
   progressPercent: z.number().min(0).max(100),
   transcript: TranscriptSchema.optional(),
   recap: RecapSchema.optional(),
+  details: WeddingDetailsSchema.optional(),
   blogOutput: BlogOutputSchema.optional(),
   followUps: z.array(FollowUpSchema).default([]),
   googleDoc: GoogleDocSchema.optional(),
@@ -168,6 +238,7 @@ export const PipelineStartRequestSchema = z.object({
   uploadToken: z.string().min(1),
   idempotencyKey: z.string().min(8),
   transcriptText: z.string().optional(),
+  details: WeddingDetailsSchema.optional(),
   simulate: PipelineSimulationSchema
 });
 
@@ -175,11 +246,21 @@ export type SessionStage = z.infer<typeof SessionStageSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Recap = z.infer<typeof RecapSchema>;
 export type BlogOutput = z.infer<typeof BlogOutputSchema>;
+export type BlogSection = z.infer<typeof BlogSectionSchema>;
+export type CreditLine = z.infer<typeof CreditLineSchema>;
+export type TeamRole = z.infer<typeof TeamRoleSchema>;
+export type TeamAssignment = z.infer<typeof TeamAssignmentSchema>;
+export type Venue = z.infer<typeof VenueSchema>;
+export type Vendor = z.infer<typeof VendorSchema>;
+export type CoupleStory = z.infer<typeof CoupleStorySchema>;
+export type WeddingDetails = z.infer<typeof WeddingDetailsSchema>;
+export type WeddingDetailsInput = z.input<typeof WeddingDetailsSchema>;
 export type FollowUp = z.infer<typeof FollowUpSchema>;
 export type SessionResult = z.infer<typeof SessionResultSchema>;
 export type SignUploadRequest = z.infer<typeof SignUploadRequestSchema>;
 export type SignUploadResponse = z.infer<typeof SignUploadResponseSchema>;
 export type PipelineStartRequest = z.infer<typeof PipelineStartRequestSchema>;
+export type PipelineStartRequestInput = z.input<typeof PipelineStartRequestSchema>;
 export type GoogleAuthStatus = z.infer<typeof GoogleAuthStatusSchema>;
 
 export const PERFORMANCE_BUDGETS_MS = {
@@ -191,15 +272,4 @@ export const PERFORMANCE_BUDGETS_MS = {
 export function buildObjectKey(sessionId: string, fileName: string) {
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
   return `sessions/${sessionId}/${safeName}`;
-}
-
-export function validateBlogTitle(title: string, recap: Pick<Recap, "couple_names" | "venue_name" | "venue_city_state">) {
-  const normalizedTitle = title.toLowerCase();
-  const couplesOk = recap.couple_names
-    .toLowerCase()
-    .split(/\s+/)
-    .some((token) => normalizedTitle.includes(token));
-  const venueOk = normalizedTitle.includes(recap.venue_name.toLowerCase()) || normalizedTitle.includes(recap.venue_city_state.toLowerCase());
-
-  return couplesOk && venueOk;
 }

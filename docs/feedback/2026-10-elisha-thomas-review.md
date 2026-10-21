@@ -213,3 +213,30 @@ Return JSON only.
 - What are the exact SEO title and description character limits she sees in Squarespace?
 - Where do team assignments, vendor lists, and couple backstory live today (logistics sheet, questionnaire, Asana)? Could the app read them directly?
 - Her two slug examples differ slightly: `elisha-thomas-refined-catholic-church-wedding-gainesville-fl` (no venue name) vs `brylin-william-intimate-wedding-historic-andrews-chapel-dunedin-fl` (venue name). Is the rule "omit the venue for church weddings", like the keyword line?
+
+---
+
+## 8. Implementation (Oct 21)
+
+Answers that came back: Elisha & Thomas was shot by Michael Kuo (photo) and Austin Taft (video); the church is St. Augustine Catholic Church & Student Center; the reception was at the Thomas Center.
+
+Before writing code, we read ~100 published posts from the public Squarespace blog feed, so the rules come from what's actually live:
+- **Church-only weddings name no venue** ("Olivia & Dustin’s traditional church wedding in Deltona, FL"). **Church + reception venue names both** ("…at Saint Augustine Catholic Church & The Yardery in Sanford, FL"). The **URL keeps only the event venue** ("diana-ricardo-traditional-catholic-wedding-outdoor-reception-the-yardery-sanford-fl"). The code follows these rules. Elisha & Thomas's URL therefore keeps `thomas-center`, which differs from Amy's hand-written example; confirm with her.
+- **Gainesville:** both published Gainesville posts say "in/near Gainesville, FL" with no larger region, and Gainesville is its own market. The intro follows that precedent, and "Central Florida" goes into the hidden caption keywords and tags. Switching the intro to "Gainesville, Central Florida" is a one-line change in `house-style/config.ts`.
+- **Real strings, not placeholders:** the kids note, vendor credit labels ("Author Made Team Photographer: …"), categories ("Michael K", "Kelly", "Maddie", "Rob", "Austin"), the excerpt call to action, SEO limits (100/400 characters, the max seen across all posts), 17 venue spotlight links, and the existing tag vocabulary.
+
+| Plan item | Status | Where |
+|---|---|---|
+| Paste-sheet output in Squarespace order (outline, image slugs, internal links removed) | Done | `BlogOutputSchema`, `google-docs.ts` |
+| Heading 3, italics, and links in the Doc | Done | `buildDocRequests` |
+| Templated fields built in code (title, keyword line, intro, credits, slug, excerpt, categories, SEO title, kids note, venue review link) | Done | `house-style/assemble.ts` |
+| City→region lookup, with AI fallback + flag | Done | `house-style/config.ts` |
+| Lint: sentence case, split headings, banned words, repeated keywords, SEO length, word count, closing line, invented quotes; one revision pass | Done | `house-style/lint.ts`, `pipeline.ts` |
+| Full transcript passed to the generator; extraction keeps anecdotes/quotes/behind-the-scenes | Done | `prompts.ts` |
+| Intake: couple, venues + church checkbox, team roles, kids, couple story, vendors | Done | `apps/web/src/PostDetailsForm.tsx` |
+| Golden tests from published posts and Amy's comments | Done | `house-style.test.ts` |
+| Hero caption master string | **Open.** It's hidden on the live site, so we can't read it. The doc lists keywords to swap in instead. |
+| Story follow-up questions during review | **Open.** Not built yet; the couple-story fields cover part of it. |
+| Prefill intake from bookings / logistics sheet | **Open.** |
+| Gallery ordering helper | **Open** (later). |
+| Real-model eval against the Elisha & Thomas recording | **Open.** Needs `OPENAI_API_KEY` and the original audio. |
