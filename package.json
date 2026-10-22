@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "build:contracts": "npm --workspace @wedding/contracts run build",
     "dev:contracts": "npm --workspace @wedding/contracts run dev",
+    "predev:api": "npm run build:contracts",
     "dev:api": "npm --workspace @wedding/api run dev",
     "predev:web": "npm run build:contracts",
     "dev:web": "npm --workspace @wedding/web run dev",
