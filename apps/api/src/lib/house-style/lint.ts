@@ -2,6 +2,7 @@ import {
   BANNED_PHRASES,
   BODY_WORD_RANGE,
   GENERIC_TITLE_WORDS,
+  NEVER_PUBLISH,
   PROPER_NOUN_ALLOWLIST,
   SEO_DESCRIPTION_MAX_CHARS,
   SEO_DESCRIPTION_MIN_CHARS
@@ -68,6 +69,12 @@ export function findBannedPhrases(text: string) {
   return BANNED_PHRASES.filter((phrase) => new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(lower));
 }
 
+// Topics that never belong in a post, whatever the transcript said. The prompt states these too;
+// this is the backstop that drives the revision pass when the model carries one through anyway.
+export function findForbiddenTopics(text: string) {
+  return NEVER_PUBLISH.filter((topic) => topic.patterns.some((pattern) => pattern.test(text)));
+}
+
 export function bodyText(generated: Pick<GeneratedPost, "opening" | "sections" | "closing">) {
   return [...generated.opening, ...generated.sections.flatMap((section) => section.paragraphs), generated.closing].join("\n\n");
 }
@@ -105,6 +112,10 @@ export function lintGeneratedPost(generated: GeneratedPost, facts: PostFacts, tr
   const banned = findBannedPhrases(prose);
   if (banned.length > 0) {
     issues.push(`Remove these words/phrases (not our voice): ${banned.join(", ")}.`);
+  }
+
+  for (const topic of findForbiddenTopics(prose)) {
+    issues.push(topic.fix);
   }
 
   const descriptorWords = generated.title_descriptor.split(/[\s,]+/).filter(Boolean);

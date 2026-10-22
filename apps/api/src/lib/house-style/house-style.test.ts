@@ -13,6 +13,7 @@ import {
   buildUrlSlug,
   collectProperNouns,
   findBannedPhrases,
+  findForbiddenTopics,
   findRepeatedKeywordWords,
   findUnsupportedQuotes,
   lintGeneratedPost,
@@ -263,4 +264,65 @@ describe("house style: hero image keyword string", () => {
       "Classic elegant church indoor chapel wedding at Baughman Center in Gainesville, FL – wedding photographer Clermont Winter Garden Apopka Winter Park Orlando Gainesville Central Florida – best affordable wedding venues Orlando – unique wedding venues in Central Florida – micro wedding venues in Orlando – outdoor wedding venues Orlando Central Florida – best wedding photographer Orlando – Author Made affordable wedding photographer videographer near me – best Orlando wedding photographer near me"
     );
   });
+});
+
+describe("house style stance: Alison & Nick (Oct 2026 tone review)", () => {
+  // Amy's verdict on the generated draft was "this sucks". Every excerpt below is verbatim from it.
+  const draftExcerpts: Array<[string, string]> = [
+    ["medical", "Alison’s parents couldn’t make it due to her father’s medical condition and some travel logistics"],
+    ["vendor_performance", "There was no coordinator, so as soon as everyone arrived, the chaos hit its peak"],
+    ["vendor_performance", "sprinting to his car for a backup after the first one died, causing a 10-minute delay"],
+    ["our_equipment", "dodging technical hiccups (camera sensors and all), we stayed on our toes"],
+    ["discomfort", "Nick was sweating so much, and he is not a fan of Florida’s heat"],
+    ["discomfort", "the ballroom was still muggy and a little buggy"],
+    ["discomfort", "Alison was hot, tired, and ready to be done"],
+    ["property_safety", "an Airbnb with a dedicated ballroom space, but no main power after a previous electrical fire"],
+    ["mood_concession", "everyone powered through, and we did our best to keep the energy positive"],
+    ["mood_concession", "With Alison’s family missing, there was a bittersweet feeling in the air"]
+  ];
+
+  for (const [topicId, excerpt] of draftExcerpts) {
+    it(`flags ${topicId}: ${excerpt.slice(0, 48)}…`, () => {
+      expect(findForbiddenTopics(excerpt).map((topic) => topic.id)).toContain(topicId);
+    });
+  }
+
+  // The published posts name hard things and resolve them. None of this may trip the stance rules,
+  // or the pipeline would reject Author Made's own best work.
+  const publishedExcerpts: Array<[string, string]> = [
+    [
+      "Nicole & Jeff: the storm, named and closed",
+      "Then the storm arrived. For a little while, everyone simply waited. Rain poured down, decorations were hurried under cover, and the original timeline disappeared. But as soon as there was a break in the weather, everyone adapted and the ceremony moved forward."
+    ],
+    [
+      "Nicole & Jeff: the venue praised for absorbing the problem",
+      "One thing we especially appreciate about Villa Festa is how flexible the property is when Florida weather inevitably decides to do its own thing. The transition was smooth, guests stayed dry, and once the rain passed, we were still able to explore the property for portraits."
+    ],
+    [
+      "Nicole & Jeff: a death in the family, handled with dignity",
+      "In honor of Nicole’s brother, who had passed away less than a year earlier, a special song played before she walked down the aisle. You could feel the weight of the moment throughout the ceremony."
+    ],
+    [
+      "Nicole & Jeff: the closing pivot",
+      "Yes, the weather forced everyone to pivot. But none of that is what we’ll remember first. We’ll remember Jeff struggling to read his vows because he was overwhelmed with emotion."
+    ],
+    [
+      "Amber & Phillip: chaos that belongs to the couple",
+      "Amber & Phillip’s wedding day was riotous fun, a perfect reflection of their relationship as best friends and their chaotic yet laid-back personalities. Between the quiet tears during their vows and the absolute chaos of the dance floor, their wedding never tried to be anything other than what it was."
+    ],
+    [
+      "Amber & Phillip: a plan that fell through, as a setup",
+      "Phillip originally planned to propose in Nashville, but when the ring didn’t arrive in time, he pivoted. With the help of a friend, he pulled off a sunset proposal on a boat, dolphins in the background."
+    ],
+    [
+      "Amber & Phillip: a modest venue, framed by what it offered",
+      "Set on a friend’s property in Arcadia, this wedding leaned fully into the rustic, outdoor vibe. It was about having the space to bring their people together and celebrate without limitations."
+    ]
+  ];
+
+  for (const [label, excerpt] of publishedExcerpts) {
+    it(`leaves published copy alone — ${label}`, () => {
+      expect(findForbiddenTopics(excerpt)).toEqual([]);
+    });
+  }
 });

@@ -5,6 +5,8 @@ import {
   BODY_WORD_RANGE,
   EVENT_TYPES,
   GENERIC_TITLE_WORDS,
+  NEVER_PUBLISH,
+  OWNED_ENERGY_WORDS,
   REGION_IDS,
   SEO_DESCRIPTION_MAX_CHARS,
   SEO_DESCRIPTION_MIN_CHARS,
@@ -55,6 +57,13 @@ Elisha & Thomas’s wedding day began at bride Elisha’s family home. You could
 
 A reception of laughter, blessings, and joy
 The pinnacle moment of the reception, though, had to be Elisha & Thomas’s choreographed first dance. Like something out of a Disney movie, the newlyweds sailed around the dance floor, with most guests either dropping jaws in amazement or shedding tears. The father-bride and mother-groom dances followed, and we snuck in a tender shot of Elisha’s mother recording the father-bride dance on her phone (don’t worry, Mom: we filmed it too!).`;
+
+// Nicole & Jeff at Villa Festa (published Aug 2026): the house move for a day that went wrong.
+const STANCE_EXAMPLE = `Then the storm arrived. For a little while, everyone simply waited. Rain poured down, decorations were hurried under cover, and the original timeline disappeared. But as soon as there was a break in the weather, everyone adapted and the ceremony moved forward.
+
+One thing we especially appreciate about Villa Festa is how flexible the property is when Florida weather inevitably decides to do its own thing.
+
+Yes, the weather forced everyone to pivot. But none of that is what we’ll remember first. We’ll remember Jeff struggling to read his vows because he was overwhelmed with emotion.`;
 
 // Published post titles, for the range of title descriptors Amy uses.
 const TITLE_EXAMPLES = [
@@ -144,6 +153,19 @@ VOICE
 - Plain modern words. Never use: ${BANNED_PHRASES.join(", ")}.
 - Use only facts from the inputs. If a beat isn't there, leave it out. Only put words in quotation marks if they appear in the transcript or the couple story.
 
+STANCE
+- You are the couple's advocate. This post is a keepsake their families will read and a piece of our marketing. It is not a field report.
+- The transcript is a candid debrief. It dwells on what was hard, because that is what a debrief is for. Do not carry that framing into the post.
+- A difficulty belongs in the post only when the same paragraph also says how it was handled or what it made possible. Name it plainly, then close it. If the transcript doesn't give you the resolution, leave the difficulty out.
+- Any section that opens on a setback must end on what outranked it.
+- Credit the save to people: the couple, their families, the venue, the vendors, or us. Never leave a problem sitting on someone.
+- ${OWNED_ENERGY_WORDS.join(", ")}: these may describe the couple's own energy or a packed dance floor, where they read as a compliment. They may never describe the schedule, the venue, or the vendors.
+- Don't overcorrect into praise the day didn't earn. Understating a hard moment is right; inventing a happy one is not.
+
+NEVER PUBLISH (leave out entirely, however much the transcript dwells on it)
+${NEVER_PUBLISH.map((topic) => `- ${topic.rule}`).join("\n")}
+- A quote that makes the couple sound dismissive about their own wedding.
+
 STRUCTURE
 - opening: 1-2 paragraphs with no heading. Start with the couple: how they met, why this venue, anything distinctive. Use a direct quote from the couple if one is provided (Vogue Weddings caption style).
 - sections: 3-4, following the day (getting ready, ceremony, portraits, reception). Skip any part with no material. If the venue is distinctive, one section can talk about the venue from a photographer's point of view.
@@ -154,6 +176,11 @@ STRUCTURE
 VOICE EXAMPLE (Amy's own rewrite; match this voice, not its facts)
 """
 ${VOICE_EXAMPLE}
+"""
+
+STANCE EXAMPLE (published post; the storm is named, then closed, then outranked)
+"""
+${STANCE_EXAMPLE}
 """
 
 TITLE
