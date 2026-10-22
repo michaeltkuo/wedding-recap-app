@@ -11,9 +11,14 @@
     "typecheck": "npm --workspace @wedding/contracts run typecheck && npm --workspace @wedding/api run typecheck && npm --workspace @wedding/web run typecheck",
     "test": "npm --workspace @wedding/contracts run test && npm --workspace @wedding/api run test && npm --workspace @wedding/web run test",
     "test:e2e": "playwright test",
+    "build:contracts": "npm --workspace @wedding/contracts run build",
+    "dev:contracts": "npm --workspace @wedding/contracts run dev",
+    "predev:api": "npm run build:contracts",
     "dev:api": "npm --workspace @wedding/api run dev",
+    "predev:web": "npm run build:contracts",
     "dev:web": "npm --workspace @wedding/web run dev",
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\""
+    "predev": "npm run build:contracts",
+    "dev": "concurrently -n contracts,api,web -c magenta,blue,green \"npm run dev:contracts\" \"npm --workspace @wedding/api run dev\" \"npm --workspace @wedding/web run dev\""
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
