@@ -89,6 +89,41 @@ async function callOpenAi(endpoint: string, init: RequestInit) {
   return response;
 }
 
+// The 4o transcribe models return the transcript as output tokens and stop at 2,000 of them, with a
+// 200 response and no warning, so a long recap silently loses its back half. whisper-1 streams the
+// whole file instead and is the default. This guard exists for the case where someone points
+// OPENAI_TRANSCRIPTION_MODEL back at a capped model: it only fires for those models, so a short
+// recording that genuinely trails off mid-sentence is never affected.
+const TOKEN_CAPPED_TRANSCRIPTION_MODELS = ["gpt-4o-transcribe", "gpt-4o-mini-transcribe"];
+
+// 2,000 tokens is roughly 1,500 words. Anything at or past that from a capped model is at the ceiling.
+const TOKEN_CAP_WORD_THRESHOLD = 1_500;
+
+export function isTokenCappedTranscriptionModel(model: string) {
+  return TOKEN_CAPPED_TRANSCRIPTION_MODELS.some((capped) => model.toLowerCase().startsWith(capped));
+}
+
+// A complete transcript ends on a sentence. A truncated one stops mid-word.
+export function endsMidSentence(transcriptText: string) {
+  return !/[.!?\u2026]["'\u2019\u201d)\]]*$/.test(transcriptText.trim());
+}
+
+export function assertTranscriptNotTruncated(transcriptText: string, model: string) {
+  const words = transcriptText.trim().split(/\s+/).filter(Boolean).length;
+  if (isTokenCappedTranscriptionModel(model) && words >= TOKEN_CAP_WORD_THRESHOLD) {
+    throw new Error(
+      `Transcription looks truncated: ${model} returned ${words} words, at its 2,000 output-token ceiling. ` +
+        `Audio past roughly 10 minutes is dropped without an error. Set OPENAI_TRANSCRIPTION_MODEL=whisper-1.`
+    );
+  }
+  if (endsMidSentence(transcriptText)) {
+    console.warn(
+      `[transcription] transcript ends mid-sentence (${words} words, model ${model}). ` +
+        `It may be incomplete - check the end of the recap before publishing.`
+    );
+  }
+}
+
 async function transcribeAudioFromUpload(content: Buffer, mimeType: string) {
   const audioBytes = Uint8Array.from(content);
   const audioBlob = new Blob([audioBytes.buffer], { type: mimeType });
@@ -106,6 +141,8 @@ async function transcribeAudioFromUpload(content: Buffer, mimeType: string) {
   if (!transcriptText) {
     throw new Error("Transcription returned empty text");
   }
+
+  assertTranscriptNotTruncated(transcriptText, API_CONFIG.openai.transcriptionModel);
 
   return transcriptText;
 }
