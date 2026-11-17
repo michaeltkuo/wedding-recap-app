@@ -49,13 +49,19 @@ export const API_CONFIG = {
     ]
   },
   upload: {
-    maxSizeBytes: 50 * 1024 * 1024,
+    // Matches the transcription API's own file cap (25 MiB). It used to be 50 MiB, which let an
+    // upload through that the transcription call would then reject.
+    maxSizeBytes: 25 * 1024 * 1024,
     ttlSeconds: 900,
     allowedMimeTypes: ["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav"]
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY ?? "",
-    transcriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "gpt-4o-mini-transcribe",
+    // whisper-1, not gpt-4o-mini-transcribe. The 4o transcribe models emit the transcript as output
+    // tokens and cap at 2,000 of them, so audio past roughly 10 minutes is dropped silently - the
+    // API still returns 200. A 19-minute field recap came back as 1,631 words ending mid-word.
+    // See docs/feedback/2026-11-transcription-truncation.md.
+    transcriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1",
     extractionModel: process.env.OPENAI_EXTRACTION_MODEL ?? "gpt-4.1-mini",
     generationModel: process.env.OPENAI_GENERATION_MODEL ?? "gpt-4.1"
   }
