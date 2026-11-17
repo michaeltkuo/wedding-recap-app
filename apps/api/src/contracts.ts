@@ -1,1 +1,1 @@
-export * from "../../../packages/contracts/dist/index.js";
+export * from "@wedding/contracts";
